@@ -1,0 +1,5 @@
+{
+  "name": "短剧导演专业版 ( Director Pro)",
+  "description": "专业级 AI 电影导演工具，用于商业音乐视频的前期策划。通过分析文本，生成精确到帧的分镜脚本和视觉提示词。",
+  "requestFramePermissions": []
+}
