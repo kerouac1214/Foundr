@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foundr API Diagnostics</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        .box {
+            border: 1px solid #333;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #D4AF37;
+        }
+
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #555;
+        }
+
+        .log {
+            white-space: pre-wrap;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .success {
+            color: #4ade80;
+        }
+
+        .error {
+            color: #f87171;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Foundr API Diagnostics</h1>
+    <p>Proxy URL: <span id="proxyUrl"></span></p>
+
+    <div class="box">
+        <h2>1. Gemini Connectivity (Script Analysis)</h2>
+        <input type="password" id="geminiKey" placeholder="Gemini API Key" style="width: 300px; padding: 5px;">
+        <button onclick="testGemini()">Test Gemini</button>
+        <div id="geminiLog" class="log">Ready to test...</div>
+    </div>
+
+    <div class="box">
+        <h2>2. RunningHub Connectivity (Voice Clone)</h2>
+        <input type="password" id="rhKey" placeholder="RunningHub API Key" style="width: 300px; padding: 5px;">
+        <button onclick="testRunningHub()">Test RunningHub</button>
+        <div id="rhLog" class="log">Ready to test...</div>
+    </div>
+
+    <script>
+        const PROXY_BASE = "https://rough-mode-92f3.kerouac1214.workers.dev";
+        document.getElementById('proxyUrl').textContent = PROXY_BASE;
+
+        // Auto-fill from known keys if possible (simulated for user convenience if they edit this file, otherwise they paste)
+        // I will revert to empty placeholders to be safe, user can fill.
+
+        function log(id, msg, type = 'info') {
+            const el = document.getElementById(id);
+            const span = document.createElement('div');
+            span.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            if (type === 'error') span.className = 'error';
+            if (type === 'success') span.className = 'success';
+            el.appendChild(span);
+        }
+
+        async function testGemini() {
+            const elId = 'geminiLog';
+            const key = document.getElementById('geminiKey').value.trim();
+            if (!key) return log(elId, "Please enter Gemini API Key", 'error');
+
+            document.getElementById(elId).innerHTML = ''; // Clear log
+            log(elId, "Step 1: Checking Proxy Access (List Models)...");
+
+            try {
+                // Test 1: List Models (Basic Connectivity)
+                const listUrl = `${PROXY_BASE}/google/v1beta/models?key=${key}`;
+                const t0 = performance.now();
+                const res = await fetch(listUrl);
+                const t1 = performance.now();
+
+                log(elId, `Proxy connection took ${Math.round(t1 - t0)}ms. Status: ${res.status}`);
+
+                if (res.ok) {
+                    const data = await res.json();
+                    log(elId, `Success! Found ${data.models?.length || 0} models.`);
+
+                    // Test 2: Check Specific Models
+                    const models = data.models || [];
+                    const hasGemini3 = models.some(m => m.name.includes('gemini-3-flash'));
+                    log(elId, `Model 'gemini-3-flash-preview' in list? ${hasGemini3 ? 'YES' : 'NO (This is expected if preview)'}`);
+
+                    // Test 3: Direct Probe of Gemini 3
+                    log(elId, "Step 2: Probing 'gemini-3-flash-preview' directly...");
+                    const probeUrl = `${PROXY_BASE}/google/v1beta/models/gemini-3-flash-preview?key=${key}`;
+                    const probeRes = await fetch(probeUrl);
+                    if (probeRes.ok) {
+                        const probeData = await probeRes.json();
+                        log(elId, "Gemini 3 Flash IS accessible!", 'success');
+                        log(elId, JSON.stringify(probeData, null, 2));
+                    } else {
+                        log(elId, `Gemini 3 Flash Probe Failed: ${probeRes.status}`, 'error');
+                        log(elId, await probeRes.text());
+                    }
+
+                } else {
+                    const txt = await res.text();
+                    log(elId, `Gemini List Failed: ${txt}`, 'error');
+                }
+            } catch (e) {
+                log(elId, `Network Error: ${e.message}`, 'error');
+                log(elId, "Possible CORS issue or Proxy Down.", 'error');
+            }
+        }
+
+        async function testRunningHub() {
+            const elId = 'rhLog';
+            const key = document.getElementById('rhKey').value.trim();
+            if (!key) return log(elId, "Please enter RunningHub API Key", 'error');
+
+            document.getElementById(elId).innerHTML = ''; // Clear log
+            log(elId, "Step 1: Testing Preflight (CORS) & Auth...");
+
+            try {
+                // We'll try to create a task with a dummy input to see authentication status
+                // If CORS fails, it will throw immediately.
+                const url = `${PROXY_BASE}/runninghub/external/server/v1/open/task/search`; // Use search or list endpoint if available? 
+                // RunningHub API docs are scarce in my context, but 'run' was used.
+                // Let's use the exact endpoint that was failing: /run
+
+                const runUrl = `${PROXY_BASE}/runninghub/external/server/v1/open/run`;
+
+                const body = {
+                    workflow_id: "0", // Invalid ID, should trigger API error but pass CORS/Auth
+                    apiType: 4,
+                    input_data: { audio: "test", text: "test" }
+                };
+
+                const res = await fetch(runUrl, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': key,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                log(elId, `Response Status: ${res.status}`);
+
+                if (res.ok) {
+                    log(elId, "Connection Successful!", 'success');
+                    log(elId, await res.text());
+                } else {
+                    const txt = await res.text();
+                    log(elId, `API Error: ${txt}`, 'error');
+
+                    if (txt.includes("Proxy Internal Error")) log(elId, "This confirms the Proxy is reachable but upstream failed.", 'info');
+                    if (txt.includes("Proxy Upstream Error")) log(elId, "This is good! Proxy works, but API rejected request (likely invalid ID, which is expected).", 'success');
+                }
+
+            } catch (e) {
+                log(elId, `Network/CORS Error: ${e.message}`, 'error');
+                if (e.message.includes("Failed to fetch")) {
+                    log(elId, "CORS BLOCK DETECTED. The 'apikey' header is likely still blocked.", 'error');
+                }
+            }
+        }
+    </script>
+    <div style="margin-top: 2rem; border-top: 1px solid #333; padding-top: 1rem;">
+        <h2>RunningHub Upload Diagnostic</h2>
+        <p>Test if we can upload a file to get a filename/URL.</p>
+        <button onclick="testUpload()"
+            style="padding: 0.5rem 1rem; cursor: pointer; background: #2196F3; color: white; border: none;">Test Upload
+            APIs</button>
+        <div id="upload-logs"
+            style="margin-top: 1rem; background: #000; padding: 1rem; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">
+            Waiting to test...</div>
+    </div>
+
+    <script>
+        async function testUpload() {
+            const rhKey = document.getElementById('rh-key').value.trim();
+            const logEl = document.getElementById('upload-logs');
+            logEl.textContent = "Starting Upload Tests...\n";
+
+            if (!rhKey) {
+                logEl.textContent += "Error: Please enter RunningHub Key first.\n";
+                return;
+            }
+
+            // Create a dummy WAV blob
+            const wavBytes = new Uint8Array([
+                0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45, 0x66, 0x6D, 0x74, 0x20,
+                0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x44, 0xAC, 0x00, 0x00, 0x88, 0x58, 0x01, 0x00,
+                0x02, 0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00
+            ]);
+            const blob = new Blob([wavBytes], { type: 'audio/wav' });
+            const formData = new FormData();
+            formData.append('image', blob, 'test_audio.wav'); // ComfyUI often expects 'image' field even for other files, or 'file'
+            const formDataFile = new FormData();
+            formDataFile.append('file', blob, 'test_audio.wav');
+
+            const candidates = [
+                { name: "Native Proxy (Upload Image)", url: `https://www.runninghub.cn/proxy/${rhKey}/upload/image`, form: formData },
+                { name: "Native Proxy (Upload File)", url: `https://www.runninghub.cn/proxy/${rhKey}/upload/file`, form: formDataFile },
+                { name: "Task OpenAPI Upload", url: `https://www.runninghub.cn/task/openapi/upload`, form: formDataFile },
+                { name: "V2 OpenAPI Upload", url: `https://www.runninghub.cn/openapi/v2/upload`, form: formDataFile }
+            ];
+
+            for (const c of candidates) {
+                logEl.textContent += `\nTesting [${c.name}]...\nURL: ${c.url}\n`;
+                try {
+                    const resp = await fetch(c.url, {
+                        method: 'POST',
+                        body: c.form,
+                        // Note: No headers needed for proxy usually as key is in URL, but we'll try adding one if this fails
+                        headers: {
+                            // "Authorization": `Bearer ${rhKey}` // Try without auth first as it's in URL for proxy
+                        }
+                    });
+
+                    const text = await resp.text();
+                    logEl.textContent += `Status: ${resp.status}\nResponse: ${text.substring(0, 200)}...\n`;
+
+                    if (resp.ok) {
+                        logEl.textContent += ">>> SUCCESS! Found a working endpoint.\n";
+                    }
+                } catch (e) {
+                    logEl.textContent += `Error: ${e.message}\n`;
+                }
+            }
+            logEl.textContent += "\nTests Completed.";
+        }
+    </script>
+</body>
+
+</html>

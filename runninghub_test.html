@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RunningHub API Diagnostic</title>
+</head>
+
+<body style="background: #111; color: #fff; font-family: sans-serif; padding: 2rem;">
+    <h1>RunningHub API Connectivity Test</h1>
+    <p>This script attempts to connect to RunningHub (r.302.ai) to check for CORS or Network errors.</p>
+
+    <div style="margin-bottom: 2rem;">
+        <label>API Key (Optional): <input type="password" id="apiKey" placeholder="Enter RunningHub Key if needed"
+                style="padding: 0.5rem; width: 300px;"></label>
+        <button onclick="testConnectivity()" style="padding: 0.5rem 1rem; cursor: pointer;">Test Connection</button>
+    </div>
+
+    <div id="output"
+        style="background: #222; padding: 1rem; border-radius: 8px; white-space: pre-wrap; font-family: monospace;">
+        Waiting to test...</div>
+
+    <script>
+        async function testConnectivity() {
+            const output = document.getElementById('output');
+            const apiKey = document.getElementById('apiKey').value;
+            output.textContent = 'Testing connection to https://r.302.ai/task/history ...\n';
+
+            try {
+                // Attempt a simple GET request to a known endpoint
+                // Using a made-up ID just to test the connection, expecting a 404 or 400, but NOT a Network Error.
+                const response = await fetch('https://r.302.ai/task/history/test-id-123', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                output.textContent += `Response Status: ${response.status}\n`;
+                output.textContent += `Response OK: ${response.ok}\n`;
+
+                try {
+                    const data = await response.json();
+                    output.textContent += `Response Data: ${JSON.stringify(data, null, 2)}\n`;
+                } catch (e) {
+                    output.textContent += `Response Text: ${await response.text()}\n`;
+                }
+
+                if (response.status === 200 || response.status === 400 || response.status === 401 || response.status === 404) {
+                    output.textContent += '\n✅ CONNECTION SUCCESSFUL (Server reachable, CORS OK)';
+                } else {
+                    output.textContent += '\n⚠️ SERVER ERROR';
+                }
+
+            } catch (error) {
+                output.textContent += `\n❌ CONNECTION FAILED: ${error.message}\n`;
+                if (error.message.includes('Failed to fetch')) {
+                    output.textContent += 'Possible Causes:\n1. CORS (Cross-Origin Resource Sharing) blocked by server.\n2. Network firewall/blocking.\n3. Incorrect URL scheme.';
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

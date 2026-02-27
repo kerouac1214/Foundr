@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini API Diagnostic</title>
+</head>
+
+<body style="background: #111; color: #fff; font-family: sans-serif; padding: 2rem;">
+    <h1>Gemini API Connectivity Test</h1>
+    <p>Testing connection to Gemini via Proxy: https://rough-mode-92f3.kerouac1214.workers.dev/google</p>
+
+    <div style="margin-bottom: 2rem;">
+        <label>API Key: <input type="password" id="apiKey" placeholder="Enter Gemini API Key"
+                value="AIzaSyBCnlyZSrp6g78DXpg0UmcbWCBWojcwe1o" style="padding: 0.5rem; width: 300px;"></label>
+        <button onclick="testConnectivity()" style="padding: 0.5rem 1rem; cursor: pointer;">Test Connection</button>
+    </div>
+
+    <div id="output"
+        style="background: #222; padding: 1rem; border-radius: 8px; white-space: pre-wrap; font-family: monospace;">
+        Waiting to test...</div>
+
+    <script>
+        async function testConnectivity() {
+            const output = document.getElementById('output');
+            const apiKey = document.getElementById('apiKey').value;
+            const baseUrl = "https://rough-mode-92f3.kerouac1214.workers.dev/google";
+
+            output.textContent = `Testing connection to ${baseUrl} ...\n`;
+
+            try {
+                // Test URL: /v1beta/models/gemini-1.5-flash?key=...
+                const url = `${baseUrl}/v1beta/models/gemini-1.5-flash?key=${apiKey}`;
+
+                output.textContent += `Fetching ${url} ...\n`;
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                output.textContent += `Response Status: ${response.status}\n`;
+                output.textContent += `Response OK: ${response.ok}\n`;
+
+                try {
+                    const data = await response.json();
+                    output.textContent += `Response Data: ${JSON.stringify(data, null, 2)}\n`;
+                } catch (e) {
+                    output.textContent += `Response Text: ${await response.text()}\n`;
+                }
+
+                if (response.ok) {
+                    output.textContent += '\n✅ CONNECTION SUCCESSFUL';
+                } else {
+                    output.textContent += '\n⚠️ SERVER ERROR';
+                }
+
+            } catch (error) {
+                output.textContent += `\n❌ CONNECTION FAILED: ${error.message}\n`;
+                if (error.message.includes('Failed to fetch')) {
+                    output.textContent += 'Possible Causes:\n1. CORS blocked.\n2. Network firewall.\n3. Worker down.';
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

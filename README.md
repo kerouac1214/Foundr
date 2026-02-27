@@ -12,9 +12,14 @@ View your app in AI Studio: https://ai.studio/apps/drive/1xc8b3nG9-tWi-h9MK1e3OB
 
 **Prerequisites:**  Node.js
 
-
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Copy `.env.local.example` to `.env.local` and configure:
+   ```bash
+   cp .env.local.example .env.local
+   ```
+3. Set API keys in `.env.local`:
+   - `GEMINI_API_KEY` - Your Gemini API key (required)
+   - `RUNNINGHUB_API_KEY` - Your RunningHub API key (optional, for video generation)
+4. Run the app:
    `npm run dev`
