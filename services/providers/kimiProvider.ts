@@ -419,6 +419,14 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
 ### 2. 拆解准则 (Deconstruction Rules)
 - **视听语言的精确性 (Cinematic Precision)**：明确景别（如：CU, MS, WS, POV）和机位角度（如：Eye-level, Low-angle, High-angle）。
+- **动作离散化演算法 (Action Decomposition & Temporal Discretization)**：
+  - **任何具有叙事权重的动态瞬间（如：进门、摔倒、开火、反应）严禁合并在单一分镜中。**
+  - 你必须按照“预备 (Anticipation) -> 接触/核心 (Contact/Core) -> 结果/反应 (Result/Reaction)”的逻辑至少拆解为 3 个分镜。
+  - **黄金案例 (The Gold Standard)**：
+    - 剧本：女主下车时不慎崴脚摔倒。
+    - 拆解分镜 1：【中景/MS】镜头对准车门打开，女主的一只脚踏出车外（预备）。
+    - 拆解分镜 2：【特写/CU/极低角度】脚踝扭曲的瞬间，高跟鞋跟断裂触地（核心接触）。
+    - 拆解分镜 3：【全景/WS】女主跌坐在地上，手撑着草坪，痛苦地看着车内（结果/反应）。
 - **光圈与景深优先 (Aperture & Depth of Field)**：静态帧必须设定焦段和光圈（如：50mm f/1.8 浅景深，或 24mm f/8 极深景深），严禁在图像生成提示词中出现“运镜”指令。
 - **AI 去描述化原则 (AI Prompt Generalization)**：在提示词中，绝对禁止使用角色的具体名字。将剧中人物替换为泛化词汇（如：A 32yo man, A blond 25yo woman）。
 - **提示词双轨制 (Dual-Prompting System)**：
