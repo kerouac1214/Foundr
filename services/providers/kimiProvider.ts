@@ -235,22 +235,31 @@ content 是剧本原文的**完整拷贝**，不是摘要。
       "key_props": ["道具1", "道具2"],
       "atmosphere": "叙事氛围描述",
       "visual_anchor_prompt": {
-        "Instruction_Role": "Senior Environment Concept Artist & Level Designer",
-        "Scene_Profile": {
-          "Subject_Name": "场景英文名",
-          "Theme_Description": "Core description in English",
-          "Key_Elements": "Must include specific props in English"
+        "Instruction_Role": "Master Character Designer & Lead Cinematographer",
+        "Reference_Fidelity_Protocol": {
+          "Image_Input_Analysis": "If a reference image is uploaded, strictly extract and replicate the following: facial bone structure, skin micro-textures, hair flow, and the specific lighting temperature (e.g., 3000K amber).",
+          "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
+          "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
         },
-        "Master_Layout_Architecture": {
-          "Canvas_Division": "Professional environment breakdown sheet",
-          "Main_View": "Primary cinematic concept view, eye-level perspective",
-          "Blueprint": "Technical top-down schematic",
-          "Detail_Grid": "4 close-up prop/texture views"
+        "Identity_Consistency_Protocol": {
+          "Target_Subject": "English description of the scene. Include lighting and architecture.",
+          "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in architectural features or textures.",
+          "Core_Elements": "Key environmental elements in English"
+        },
+        "Master_Layout_Grid": {
+          "Canvas_Division": "Professional scene reference sheet. Aspect ratio 16:9.",
+          "Left_Zone": "One prominent, high-fidelity master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+          "Top_Right_Zone": "Technical layout blueprint / schematic for spatial reference.",
+          "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and key props."
         },
         "Visual_Style_Module": {
-          "Art_Style": "与项目风格一致的英文描述",
-          "Rendering_Specifics": "High-fidelity textures, cinematic lighting",
-          "Background": "Solid neutral dark grey background"
+          "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
+          "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed textures, natural subsurface scattering, soft cinematic lighting.",
+          "Background": "Solid neutral dark grey background, zero environmental interference."
+        },
+        "Technical_Override": {
+          "Keywords": "ATL, realistic, photorealistic, ultra-high fidelity, 8k UHD, film grain, realistic textures.",
+          "Negative_Prompt": "anime, cartoon, 3d render, CGI, stylized, plastic, doll-like, inconsistent with reference image, messy composition."
         }
       }
     }
@@ -324,22 +333,31 @@ content 是剧本原文的**完整拷贝**，不是摘要。
       "outfit": "基于剧情的服装材质与款式详细描述",
       "physical_traits": "核心骨骼/面部/身体特征描述（中性表情视角）",
       "consistency_seed_prompt": {
-        "Instruction_Role": "Master Character Designer & Concept Architect",
+        "Instruction_Role": "Master Character Designer & Lead Cinematographer",
+        "Reference_Fidelity_Protocol": {
+          "Image_Input_Analysis": "If a reference image is uploaded, strictly extract and replicate the following: facial bone structure, skin micro-textures, hair flow, and the specific lighting temperature (e.g., 3000K amber).",
+          "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
+          "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
+        },
         "Identity_Consistency_Protocol": {
           "Target_Subject": "Precise physical description in English. MUST SPECIFY RACE/ETHNICITY.",
-          "Identity_Lock": "Mandatory 100% facial and costume consistency across all views.",
+          "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in facial features or costume textures.",
           "Core_Elements": "Unique traits, props, signature items in English"
         },
         "Master_Layout_Grid": {
-          "Canvas_Division": "Professional character reference sheet split-view. 16:9.",
-          "Left_Zone": "Full-body portrait",
-          "Top_Right_Zone": "3-view orthographic (Front, Side, Back)",
-          "Bottom_Right_Zone": "Expression Cluster: 3 facial close-ups with different emotions"
+          "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
+          "Left_Zone": "One prominent, high-fidelity portrait or master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+          "Top_Right_Zone": "3-view technical orthographic drawings (Front, Side, Back) for modeling reference.",
+          "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and neutral facial details."
         },
         "Visual_Style_Module": {
-          "Style_Definition": "与项目风格一致的英文描述",
-          "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed, soft cinematic lighting",
-          "Background": "Solid neutral grey studio background"
+          "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
+          "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed skin textures, natural subsurface scattering, soft cinematic lighting.",
+          "Background": "Solid neutral grey studio background, zero environmental interference."
+        },
+        "Technical_Override": {
+          "Keywords": "ATL, realistic, photorealistic, ultra-high fidelity, 8k UHD, film grain, realistic fabric micro-textures.",
+          "Negative_Prompt": "anime, cartoon, 3d render, CGI, stylized, plastic, doll-like, inconsistent with reference image, messy composition."
         }
       }
     }
@@ -495,26 +513,31 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                     The consistency_seed_prompt MUST follow this EXACT JSON structure. Fill in the bracketed parts with English descriptions based on the character's context.
 
                     {
-                      "Instruction_Role": "Master Character Designer & Concept Architect",
+                      "Instruction_Role": "Master Character Designer & Lead Cinematographer",
+                      "Reference_Fidelity_Protocol": {
+                        "Image_Input_Analysis": "If a reference image is uploaded, strictly extract and replicate the following: facial bone structure, skin micro-textures, hair flow, and the specific lighting temperature (e.g., 3000K amber).",
+                        "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
+                        "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
+                      },
                       "Identity_Consistency_Protocol": {
                         "Target_Subject": "[Precise physical description of ${draft.name} in English. YOU MUST SPECIFY RACE/NATIONALITY/ETHNICITY (e.g., Asian, Caucasian, Chinese, etc.)]",
-                        "Identity_Lock": "Mandatory 100% facial and costume consistency across all views. Ensure the same character identity in every sub-panel.",
+                        "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in facial features or costume textures.",
                         "Core_Elements": "[Unique traits or props mentioned in context, translated to English]"
                       },
                       "Master_Layout_Grid": {
-                        "Canvas_Division": "Professional character reference sheet split-view. Aspect ratio 16:9.",
-                        "Left_Zone": "One prominent, high-fidelity full-body portrait representing the character's overall vibe.",
+                        "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
+                        "Left_Zone": "One prominent, high-fidelity portrait or master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
                         "Top_Right_Zone": "3-view technical orthographic drawings (Front, Side, Back) for modeling reference.",
-                        "Bottom_Right_Zone": "Expression Cluster: 3 distinct facial close-up shots showing different emotions."
+                        "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and neutral facial details."
                       },
                       "Visual_Style_Module": {
-                        "Style_Definition": "[${context.visual_style_preset} translated to English if needed]",
-                        "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed, soft cinematic lighting, neutral studio background",
-                        "Background": "Solid neutral grey or white studio background, zero environmental interference."
+                        "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
+                        "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed skin textures, natural subsurface scattering, soft cinematic lighting.",
+                        "Background": "Solid neutral grey studio background, zero environmental interference."
                       },
-                      "Anatomy_&_Ratio_Override": {
-                        "Proportion_Scale": "1:8.5",
-                        "Posture": "Clean A-Pose, high waistline, clear silhouette."
+                      "Technical_Override": {
+                        "Keywords": "ATL, realistic, photorealistic, ultra-high fidelity, 8k UHD, film grain, realistic fabric micro-textures.",
+                        "Negative_Prompt": "anime, cartoon, 3d render, CGI, stylized, plastic, doll-like, inconsistent with reference image, messy composition."
                       }
                     }
 
@@ -559,30 +582,32 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                     The visual_anchor_prompt MUST follow this EXACT JSON structure. Fill in the bracketed parts with English descriptions based on the scene's context.
 
                     {
-                      "Instruction_Role": "Senior Environment Concept Artist & Level Designer",
-                      "Scene_Profile": {
-                        "Subject_Name": "[Translate ${draft.name} to English]",
-                        "Theme_Description": "[Core description of the scene's atmosphere and structure in English]",
-                        "Key_Elements": "[Must include specific props/elements mentioned, e.g., cannons, neon signs, etc., in English]"
+                      "Instruction_Role": "Master Character Designer & Lead Cinematographer",
+                      "Reference_Fidelity_Protocol": {
+                        "Image_Input_Analysis": "If a reference image is uploaded, strictly extract and replicate the following: facial bone structure, skin micro-textures, hair flow, and the specific lighting temperature (e.g., 3000K amber).",
+                        "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
+                        "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
                       },
-                      "Master_Layout_Architecture": {
-                        "Canvas_Division": "Professional environment breakdown sheet with multiple viewports.",
-                        "Left_Main_Section": {
-                            "Top_Left": "Primary cinematic concept view (Eye-level perspective).",
-                            "Bottom_Left": "High-angle isometric view showing the overall structure and layout."
-                        },
-                        "Middle_Top_Section": "Technical architectural blueprint/schematic drawing on aged paper.",
-                        "Right_Detail_Section": {
-                            "UI_Elements": "Decorative nameplate with '[${draft.name}]' and a horizontal color palette swatch.",
-                            "Detail_Grid": "4 small square frames at the bottom-right showing individual asset close-ups (e.g., textures, machinery, specific props)."
-                        }
+                      "Identity_Consistency_Protocol": {
+                        "Target_Subject": "[Precise physical description of the scene ${draft.name} in English. Include lighting and architecture.]",
+                        "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in architectural features or textures.",
+                        "Core_Elements": "[Key environmental elements in English]"
+                      },
+                      "Master_Layout_Grid": {
+                        "Canvas_Division": "Professional scene reference sheet. Aspect ratio 16:9.",
+                        "Left_Zone": "One prominent, high-fidelity master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+                        "Top_Right_Zone": "Technical layout blueprint / schematic for spatial reference.",
+                        "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and key props."
                       },
                       "Visual_Style_Module": {
-                        "Art_Style": "[${context.visual_style_preset} translated to English if needed]",
-                        "Rendering_Specifics": "High-fidelity textures, cinematic lighting with golden hour glow, metallic reflections, intricate mechanical details.",
-                        "Background": "Solid neutral dark grey background to make the assets pop."
+                        "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
+                        "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed textures, natural subsurface scattering, soft cinematic lighting.",
+                        "Background": "Solid neutral dark grey background, zero environmental interference."
                       },
-                      "Technical_Constraints": "Maintain 100% material and color consistency across all views. Ensure the blueprint matches the 3D structure shown in the main views."
+                      "Technical_Override": {
+                        "Keywords": "ATL, realistic, photorealistic, ultra-high fidelity, 8k UHD, film grain, realistic textures.",
+                        "Negative_Prompt": "anime, cartoon, 3d render, CGI, stylized, plastic, doll-like, inconsistent with reference image, messy composition."
+                      }
                     }
 
                     IMPORTANT: Return ONLY valid JSON containing \`visual_anchor_prompt\` (as a fully formed nested JSON object representing the structure above) and \`description\` (Brief Chinese summary). Do not wrap the JSON object inside the visual_anchor_prompt field with string quotes manually! We will stringify it.`
