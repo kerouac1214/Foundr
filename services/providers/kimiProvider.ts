@@ -11,6 +11,7 @@ import {
 } from "../../types";
 import { withRetry, parseJSONRobust } from "../core";
 import { ScriptProvider } from "./base";
+import { generateId } from "../../utils";
 
 export class KimiProvider implements ScriptProvider {
     private model = "kimi-latest";
@@ -748,7 +749,7 @@ ${scenesList || '暂无全局场景资产'}
             });
 
             return {
-                id: crypto.randomUUID(),
+                id: generateId(),
                 shot_number: 0,
                 timestamp: '00:00',
                 duration: 3,
@@ -836,7 +837,7 @@ ${scenesList}
             if (shotsArray.length === 0) return [];
 
             return shotsArray.map((res: any, index: number) => ({
-                id: crypto.randomUUID(),
+                id: generateId(),
                 shot_number: 0,
                 timestamp: '00:00',
                 duration: 3,

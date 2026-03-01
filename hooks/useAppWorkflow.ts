@@ -17,6 +17,7 @@ import { extractAssets, generateStoryboard, structureEpisodes, partitionIntoChap
 import { videoSynthesisService } from '../services/videoSynthesisService';
 import { AssetDBService } from '../services/dbService';
 import { StoryboardItem, Episode, ProjectStatus, ProjectMetadata, Chapter, AnalysisMode } from '../types';
+import { generateId } from '../utils';
 
 export const useAppWorkflow = () => {
     // Store Access
@@ -148,7 +149,7 @@ export const useAppWorkflow = () => {
             const finalMetadata: ProjectMetadata = {
                 ...projectMetadata,   // Preserve chapters, full_script, analysis_mode, name, etc.
                 ...metadata,          // Let AI-returned fields (bpm, energy_level, overall_mood, transitions) override
-                id: projectMetadata?.id || crypto.randomUUID(),
+                id: projectMetadata?.id || generateId(),
                 analysis_mode: projectMetadata?.analysis_mode || 'Single_Episode',
                 status: episodicData.status,
                 episodes: episodicData.episodes,
@@ -167,7 +168,7 @@ export const useAppWorkflow = () => {
 
                 return {
                     ...item,
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     shot_number: idx + 1,
                     scene_id: resolvedSceneId,
                     timestamp: '00:00:00',
@@ -242,7 +243,7 @@ export const useAppWorkflow = () => {
 
             // Initialize Project Metadata (Chapter structure only, no assets yet)
             const finalMetadata: ProjectMetadata = {
-                id: projectMetadata?.id || crypto.randomUUID(),
+                id: projectMetadata?.id || generateId(),
                 name: projectMetadata?.name || '未命名项目',
                 full_script: freshScript,
                 analysis_mode: 'Full_Script',

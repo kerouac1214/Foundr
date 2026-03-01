@@ -13,6 +13,7 @@ import {
 } from "../../types";
 import { withRetry, getAIClient, parseJSONRobust } from "../core";
 import { ScriptProvider, ImageProvider, VideoProvider } from "./base";
+import { generateId } from "../../utils";
 
 export class GeminiProvider implements ScriptProvider, ImageProvider, VideoProvider {
     private model = "gemini-3-flash-preview";
@@ -766,7 +767,7 @@ ${scenesList || '暂无全局场景资产'}
             });
 
             return {
-                id: crypto.randomUUID(),
+                id: generateId(),
                 shot_number: 0,
                 timestamp: '00:00',
                 duration: 3,
@@ -849,7 +850,7 @@ ${scenesList}
             if (!Array.isArray(results)) return [];
 
             return results.map((res: any) => ({
-                id: crypto.randomUUID(),
+                id: generateId(),
                 shot_number: 0,
                 timestamp: '00:00',
                 duration: 3,
