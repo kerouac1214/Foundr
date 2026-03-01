@@ -66,7 +66,11 @@ const App: React.FC = () => {
     cancelBatch,
     handleFullScriptAnalysis,
     handleInsertShot,
-    handleDeriveShots
+    handleDeriveShots,
+    handleDeriveThreeShots,
+    handleGenerateNarrativeGrid,
+    handleRefineShot,
+    handleRefineDNA
   } = useAppWorkflow();
 
   // Local UI State
@@ -294,6 +298,9 @@ const App: React.FC = () => {
                     mode="text-only"
                     onInsertShot={handleInsertShot}
                     onDeriveShot={handleDeriveShots}
+                    onDeriveThreeShots={handleDeriveThreeShots}
+                    onGenerateNarrativeGrid={handleGenerateNarrativeGrid}
+                    onRefineShot={handleRefineShot}
                   />
                 )}
 
@@ -302,6 +309,7 @@ const App: React.FC = () => {
                     onReRenderCharacter={reRenderSpecificCharacter}
                     onReRenderScene={reRenderSpecificScene}
                     onGenerateAll={generateAllAssets}
+                    onRefineDNA={handleRefineDNA}
                     isGenerating={isAnalyzing}
                   />
                 )}
@@ -317,6 +325,9 @@ const App: React.FC = () => {
                         viewMode={activeView === 'images' ? 'images_only' : 'videos_only'}
                         onInsertShot={handleInsertShot}
                         onDeriveShot={handleDeriveShots}
+                        onDeriveThreeShots={handleDeriveThreeShots}
+                        onGenerateNarrativeGrid={handleGenerateNarrativeGrid}
+                        onRefineShot={handleRefineShot}
                       />
                     </div>
 

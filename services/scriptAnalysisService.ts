@@ -41,3 +41,14 @@ export const generateImagePrompt = async (
     const provider = getScriptProvider(context.script_engine);
     return await provider.generateImagePrompt(item, characters, scene, env, context);
 };
+
+export const refineAssetDNA = async (
+    name: string,
+    description: string,
+    type: 'character' | 'scene',
+    context: GlobalContext,
+    referenceImage?: string
+): Promise<string> => {
+    const provider = getScriptProvider(context.script_engine);
+    return await provider.refineAssetDNA(name, description, type, context, referenceImage);
+};

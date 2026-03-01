@@ -11,9 +11,11 @@ import {
     generateVisualPreview,
     generateVideoForShot,
     analyzeShotInsertion,
-    deriveShotsFromAnchor
+    deriveShotsFromAnchor,
+    deriveNarrativeTrinity,
+    generateNarrativeGrid
 } from '../services/geminiService';
-import { extractAssets, generateStoryboard, structureEpisodes, partitionIntoChapters, extractGlobalAssets } from '../services/scriptAnalysisService';
+import { extractAssets, generateStoryboard, structureEpisodes, partitionIntoChapters, extractGlobalAssets, refineAssetDNA } from '../services/scriptAnalysisService';
 import { videoSynthesisService } from '../services/videoSynthesisService';
 import { AssetDBService } from '../services/dbService';
 import { StoryboardItem, Episode, ProjectStatus, ProjectMetadata, Chapter, AnalysisMode } from '../types';
@@ -638,6 +640,39 @@ export const useAppWorkflow = () => {
         }
     };
 
+
+    const handleRefineDNA = async (name: string, description: string, type: 'character' | 'scene', assetId: string) => {
+        try {
+            showToast('正在提炼视觉 DNA...', 'info');
+            const asset = type === 'character' ?
+                globalContext.characters.find(c => c.char_id === assetId) :
+                globalContext.scenes.find(s => s.scene_id === assetId);
+
+            const referenceImage = asset?.reference_image_url;
+
+            const newDNA = await refineAssetDNA(
+                name,
+                description,
+                type,
+                globalContext,
+                referenceImage
+            );
+
+            if (type === 'character') {
+                updateCharacter(assetId, { consistency_seed_prompt: newDNA });
+                showToast('角色 DNA 已更新，正在重新生成预览...', 'info');
+                await reRenderSpecificCharacter(assetId);
+            } else {
+                updateScene(assetId, { visual_anchor_prompt: newDNA });
+                showToast('场景 DNA 已更新，正在重新生成预览...', 'info');
+                await reRenderSpecificScene(assetId);
+            }
+        } catch (err: any) {
+            showToast(`DNA 提炼失败: ${err.message}`, 'error');
+            console.error(err);
+        }
+    };
+
     // ========== Step 4: Storyboard Rendering ==========
 
     const renderSinglePhoto = async (index: number) => {
@@ -647,7 +682,9 @@ export const useAppWorkflow = () => {
         updateShot(item.id, { render_status: 'rendering' });
         try {
             const scene = globalContext.scenes.find(s => s.scene_id === item.scene_id);
-            const prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
+            // PRIORITIZE MANUAL PROMPT: Use item.image_prompt if edited by user, 
+            // otherwise use a previously generated one, or generate a new one.
+            const prompt = item.image_prompt || item.ai_prompts?.image_generation_prompt || await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
 
             // Build reference images for RunningHub (Prioritize Confirmed Reference over Preview)
             const refImages: string[] = [];
@@ -699,7 +736,7 @@ export const useAppWorkflow = () => {
         updateShot(item.id, { render_status: 'rendering' });
         try {
             const scene = globalContext.scenes.find(s => s.scene_id === item.scene_id);
-            const prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
+            const prompt = item.image_prompt || item.ai_prompts?.image_generation_prompt || await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
 
             // Build reference images (Prioritize Confirmed Reference over Preview)
             const refImages: string[] = [];
@@ -763,14 +800,22 @@ export const useAppWorkflow = () => {
 
             // Use pre-generated video prompt from storyboard breakdown if available,
             // otherwise fall back to LLM image prompt generation.
+            // Use manual video prompt if edited, otherwise fall back to AI generated ones
             let prompt: string;
-            if (item.ai_prompts?.video_generation_prompt) {
+            if (item.video_prompt) {
+                prompt = item.video_prompt;
+            } else if (item.ai_prompts?.video_generation_prompt) {
                 prompt = item.ai_prompts.video_generation_prompt;
             } else {
                 prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
             }
 
-            const videoEngine = item.video_engine || globalContext.video_engine;
+            // Engine priority: Item Specific > Lyric Aware Default > Global Context > Hardcoded Default
+            let videoEngine = item.video_engine;
+            if (!videoEngine) {
+                videoEngine = item.lyric_line ? 'seedance_1_5' : (globalContext.video_engine || 'wan2_2');
+            }
+
             const url = await generateVideoForShot(prompt, (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio, videoEngine, item.preview_url);
 
             // Save video clip to DB
@@ -1061,6 +1106,114 @@ export const useAppWorkflow = () => {
         }
     };
 
+    const handleDeriveThreeShots = async (anchorShot: StoryboardItem) => {
+        setIsAnalyzing(true);
+        setStatusMessage('AI 导演正在推导关联三连分镜...');
+        try {
+            const derivedShots = await deriveNarrativeTrinity(anchorShot, script, globalContext);
+            if (!derivedShots || derivedShots.length === 0) throw new Error('AI 推导返回结果为空');
+
+            const anchorIndex = storyboard.findIndex(s => s.id === anchorShot.id);
+            if (anchorIndex === -1) return;
+
+            insertShotsBatch(anchorIndex + 1, derivedShots);
+            showToast('已推导并补充 3 个关联分镜，系统正在自动绘制...', 'success');
+
+            for (const shot of derivedShots) {
+                setStatusMessage(`正在绘制推导分镜: #${shot.shot_number || '...'} `);
+                try {
+                    const scene = globalContext.scenes.find(s => s.scene_id === shot.scene_id);
+                    const prompt = shot.image_prompt || await generateImagePrompt(shot, globalContext.characters, scene, globalContext.environment, globalContext);
+                    const url = await generateVisualPreview(
+                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
+                        applyStyleConstitution(prompt, globalContext),
+                        shot.seed,
+                        (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
+                    );
+                    const dbUrl = await AssetDBService.saveAsset(`shot_${shot.id}`, projectMetadata?.id || 'default', 'image', url);
+                    updateShot(shot.id, { preview_url: dbUrl, render_status: 'done', image_prompt: prompt, candidate_image_urls: [dbUrl] });
+                } catch (e) { console.error(e); }
+            }
+        } catch (err: any) {
+            handleError(err);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleGenerateNarrativeGrid = async (anchorShot: StoryboardItem) => {
+        setIsAnalyzing(true);
+        setStatusMessage('AI 导演正在生成九宫格剧情...');
+        try {
+            const gridShots = await generateNarrativeGrid(anchorShot, script, globalContext);
+            if (!gridShots || gridShots.length === 0) throw new Error('AI 生成九宫格失败');
+
+            const anchorIndex = storyboard.findIndex(s => s.id === anchorShot.id);
+            if (anchorIndex === -1) return;
+
+            // Insert after anchor
+            insertShotsBatch(anchorIndex + 1, gridShots);
+            showToast('九宫格剧情已生成，正在后台批量绘制...', 'success');
+
+            // Render sequentially
+            for (const shot of gridShots) {
+                setStatusMessage(`正在绘制九宫格分镜 ${shot.shot_number}/9...`);
+                try {
+                    const scene = globalContext.scenes.find(s => s.scene_id === shot.scene_id);
+                    const prompt = shot.image_prompt || await generateImagePrompt(shot, globalContext.characters, scene, globalContext.environment, globalContext);
+                    const url = await generateVisualPreview(
+                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
+                        applyStyleConstitution(prompt, globalContext),
+                        shot.seed,
+                        (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
+                    );
+                    const dbUrl = await AssetDBService.saveAsset(`shot_${shot.id}`, projectMetadata?.id || 'default', 'image', url);
+                    updateShot(shot.id, { preview_url: dbUrl, render_status: 'done', image_prompt: prompt, candidate_image_urls: [dbUrl] });
+                } catch (e) { console.error(e); }
+            }
+        } catch (err: any) {
+            handleError(err);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleRefineShot = async (item: StoryboardItem, customPrompt: string) => {
+        showToast('正在根据新提示词精修重绘...', 'info');
+        updateShot(item.id, { render_status: 'rendering' });
+        try {
+            // Img2Img: use original preview_url as reference
+            const refImages = item.preview_url ? [item.preview_url] : [];
+            const prompt = applyStyleConstitution(customPrompt, globalContext);
+
+            const url = await generateVisualPreview(
+                globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
+                prompt,
+                Math.floor(Math.random() * 1000000),
+                (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio,
+                refImages
+            );
+
+            const dbUrl = await AssetDBService.saveAsset(
+                `shot_${item.id}_refined_${Date.now()}`,
+                projectMetadata?.id || 'default',
+                'image',
+                url
+            );
+
+            updateShot(item.id, {
+                preview_url: dbUrl,
+                render_status: 'done',
+                image_prompt: customPrompt,
+                candidate_image_urls: [...(item.candidate_image_urls || []), dbUrl]
+            });
+            showToast('精修重绘完成', 'success');
+        } catch (err: any) {
+            updateShot(item.id, { render_status: 'idle' });
+            showToast(`精修失败: ${err.message}`, 'error');
+        }
+    };
+
     const repairProjectAssets = async () => {
         if (!projectMetadata?.id) return;
 
@@ -1120,6 +1273,10 @@ export const useAppWorkflow = () => {
         cancelBatch,
         handleFullScriptAnalysis,
         handleInsertShot,
-        handleDeriveShots
+        handleDeriveShots,
+        handleDeriveThreeShots,
+        handleGenerateNarrativeGrid,
+        handleRefineShot,
+        handleRefineDNA
     };
 };

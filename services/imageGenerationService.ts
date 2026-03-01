@@ -31,22 +31,39 @@ const urlToBlob = async (url: string): Promise<Blob> => {
 export const applyStyleConstitution = (prompt: string, context: GlobalContext): string => {
     const stylePreset = context.visual_style_preset || "cinematic lighting, high quality";
 
-    // The "Constitution" wrapper: Triple parentheses give maximum weight in most SD/ComfyUI workflows.
-    // Placing it first ensures it's the primary semantic anchor.
-    const styledPrompt = `(((Visual Style Constitution: ${stylePreset}))), ${prompt}, masterpiece, extremely detailed, cinematic, 8k resolution.`;
+    // The "Constitution" wrapper: Triple parentheses give maximum weight.
+    // We emphasize that this is a VISUAL CONSTITUTION that must be obeyed.
+    const styledPrompt = `(((Visual Style Constitution: ${stylePreset}))), ${prompt}, masterpiece, extremely detailed, cinematic, 8k resolution, professionally color graded.`;
 
     return styledPrompt;
 };
 
 export const refineShotPrompt = (item: StoryboardItem, characters: CharacterDNA[], inputEnv: EnvironmentDNA | undefined, scene: SceneDNA | undefined, context: GlobalContext): string => {
-    const charDetails = characters.map(c =>
-        `(Character: ${c.name}, VisualDNA: ${c.consistency_seed_prompt})`
-    ).join(' AND ');
+    const charDetails = characters.map(c => {
+        let physicalDesc = "";
+        let costumeDesc = "";
+        try {
+            const parsed = JSON.parse(c.consistency_seed_prompt);
+            physicalDesc = parsed.Identity_Consistency_Protocol?.Target_Subject || "";
+            costumeDesc = parsed.Identity_Consistency_Protocol?.Core_Elements ? ` wearing ${parsed.Identity_Consistency_Protocol.Core_Elements}` : "";
+        } catch (e) {
+            physicalDesc = c.description || "";
+        }
+        return `(Subject Character: ${c.name}, Identity: ${physicalDesc}${costumeDesc}, Identity_Lock: 100%)`;
+    }).join(' AND ');
 
     const visualAnchor = scene?.visual_anchor_prompt || inputEnv?.visual_anchor_prompt || "";
+    let sceneDesc = "";
+    try {
+        const parsed = JSON.parse(visualAnchor);
+        sceneDesc = parsed.Identity_Consistency_Protocol?.Target_Subject || "";
+    } catch (e) {
+        sceneDesc = visualAnchor;
+    }
+
     const lighting = scene?.core_lighting || inputEnv?.core_lighting || "";
 
-    const coreContent = `${visualAnchor ? visualAnchor + ', ' : ''}${lighting ? lighting + ', ' : ''}${charDetails}, ACTION: ${item.action_description}, SHOT: ${item.shot_type} shot, CAMERA: ${item.camera_movement}`;
+    const coreContent = `SCENE CONTEXT: ${sceneDesc}. LIGHTING: ${lighting}. CHARACTERS: ${charDetails}. ACTION: ${item.action_description}. SHOT: ${item.shot_type} shot. CAMERA: ${item.camera_movement || 'static'}.`;
 
     return applyStyleConstitution(coreContent, context);
 };

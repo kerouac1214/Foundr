@@ -11,8 +11,19 @@ interface AssetManagerProps {
     onReRenderCharacter?: (charId: string, customPrompt?: string) => void;
     onReRenderScene?: (sceneId: string, customPrompt?: string) => void;
     onGenerateAll?: () => void;
+    onRefineDNA?: (name: string, description: string, type: 'character' | 'scene', id: string) => void;
     isGenerating?: boolean;
 }
+
+/* --- Utils --- */
+
+const getProxiedUrl = (url: string | undefined) => {
+    if (!url) return '';
+    if (url.includes('rh-images-1252422369.cos.ap-beijing.myqcloud.com')) {
+        return url.replace('https://rh-images-1252422369.cos.ap-beijing.myqcloud.com', '/rh-images');
+    }
+    return url;
+};
 
 /* --- Sub-Components --- */
 
@@ -70,9 +81,9 @@ const AssetCard: React.FC<{
             className="group relative cursor-pointer bg-[#0A0A0A] rounded-2xl border border-white/5 hover:border-[#D4AF37]/50 transition-all hover:-translate-y-1 hover:shadow-2xl overflow-hidden aspect-[3/4]"
         >
             {/* Image / Placeholder */}
-            {item.preview_url ? (
+            {(item.reference_image_url || item.preview_url) ? (
                 <img
-                    src={item.preview_url}
+                    src={getProxiedUrl(item.reference_image_url || item.preview_url)}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     alt={item.name}
                     onError={(e) => {
@@ -84,6 +95,13 @@ const AssetCard: React.FC<{
                 <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900/50 gap-2">
                     <div className="w-8 h-8 rounded-full border-2 border-zinc-700 border-t-zinc-500 animate-spin opacity-20" />
                     <span className="text-[9px] uppercase tracking-widest text-zinc-600">等待中</span>
+                </div>
+            )}
+
+            {/* Status indicator / Confirmed Badge */}
+            {item.reference_image_url && (
+                <div className="absolute top-3 left-3 bg-[#D4AF37] text-black text-[8px] font-black uppercase px-2 py-0.5 rounded shadow-lg z-10">
+                    已确认
                 </div>
             )}
 
@@ -112,228 +130,244 @@ const DetailModal: React.FC<{
     onSetAsReference?: (id: string, url: string) => void;
     onRemoveReference?: (id: string, url: string) => void;
     onCloneVoice?: (id: string, audioUrl: string, text: string) => void;
+    onRefineDNA?: (name: string, description: string, type: 'character' | 'scene', id: string) => void;
     isCloning?: boolean;
     stylePreset: string;
-}> = ({ asset, type, onClose, onUpdate, onRegenerate, isRendering, onUploadAudio, onUploadReference, onSetAsReference, onRemoveReference, onCloneVoice, isCloning, stylePreset }) => {
-    // Prevent body scroll when modal is open
-    useEffect(() => {
-        document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = 'unset'; };
-    }, []);
+}> = ({
+    asset,
+    type,
+    onClose,
+    onUpdate,
+    onRegenerate,
+    isRendering,
+    onUploadAudio,
+    onUploadReference,
+    onSetAsReference,
+    onRemoveReference,
+    onCloneVoice,
+    onRefineDNA,
+    isCloning,
+    stylePreset
+}) => {
+        // Prevent body scroll when modal is open
+        useEffect(() => {
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = 'unset'; };
+        }, []);
 
-    const getProxiedUrl = (url: string | undefined) => {
-        if (!url) return '';
-        if (url.includes('rh-images-1252422369.cos.ap-beijing.myqcloud.com')) {
-            return url.replace('https://rh-images-1252422369.cos.ap-beijing.myqcloud.com', '/rh-images');
-        }
-        return url;
-    };
+        const defaultPrompt = type === 'character'
+            ? asset.consistency_seed_prompt
+            : `${asset.visual_anchor_prompt}, cinematic wide shot, masterpiece`;
 
-    const defaultPrompt = type === 'character'
-        ? asset.consistency_seed_prompt
-        : `${asset.visual_anchor_prompt}, cinematic wide shot, masterpiece`;
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 md:p-12 animate-in fade-in duration-200">
+                {/* Close Button */}
+                <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors z-[60]">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 md:p-12 animate-in fade-in duration-200">
-            {/* Close Button */}
-            <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors z-[60]">
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-
-            <div className="w-full max-w-7xl h-full bg-[#050505] rounded-[2rem] border border-white/10 overflow-hidden flex flex-col md:flex-row shadow-2xl">
-                {/* Left: Image Preview */}
-                <div className="w-full md:w-1/2 h-[40vh] md:h-full bg-zinc-950 relative overflow-hidden group">
-                    {asset.preview_url ? (
-                        <img src={getProxiedUrl(asset.preview_url)} className="w-full h-full object-contain" alt={asset.name} />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center text-zinc-700">预览图待生成</div>
-                    )}
-                    {/* Quick Regen Button on Image */}
-                    <button
-                        onClick={() => onRegenerate(type === 'character' ? asset.char_id : asset.scene_id, defaultPrompt)}
-                        disabled={isRendering}
-                        className="absolute bottom-8 right-8 bg-[#D4AF37] text-black px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:scale-105 transition-transform shadow-xl disabled:opacity-50 disabled:scale-100"
-                    >
-                        {isRendering ? '生成中...' : '重新生成'}
-                    </button>
-                </div>
-
-                {/* Right: Controls */}
-                <div className="w-full md:w-1/2 h-full overflow-y-auto p-8 md:p-12 space-y-8 bg-[#050505]">
-                    {/* Header */}
-                    <div>
-                        <span className="text-[10px] font-black uppercase text-[#D4AF37] tracking-[0.4em] mb-2 block">{type === 'character' ? '角色资产' : '场景资产'}</span>
-                        <input
-                            value={asset.name}
-                            onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { name: e.target.value })}
-                            className="w-full bg-transparent border-none outline-none text-4xl font-black uppercase serif text-white placeholder-zinc-800"
-                        />
+                <div className="w-full max-w-7xl h-full bg-[#050505] rounded-[2rem] border border-white/10 overflow-hidden flex flex-col md:flex-row shadow-2xl">
+                    {/* Left: Image Preview */}
+                    <div className="w-full md:w-1/2 h-[40vh] md:h-full bg-zinc-950 relative overflow-hidden group">
+                        {asset.preview_url ? (
+                            <img src={getProxiedUrl(asset.preview_url)} className="w-full h-full object-contain" alt={asset.name} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-700">预览图待生成</div>
+                        )}
+                        {/* Quick Regen Button on Image */}
+                        <button
+                            onClick={() => onRegenerate(type === 'character' ? asset.char_id : asset.scene_id, defaultPrompt)}
+                            disabled={isRendering}
+                            className="absolute bottom-8 right-8 bg-[#D4AF37] text-black px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:scale-105 transition-transform shadow-xl disabled:opacity-50 disabled:scale-100"
+                        >
+                            {isRendering ? '生成中...' : '重新生成'}
+                        </button>
                     </div>
 
-                    {/* Description */}
-                    <div className="space-y-2">
-                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">描述</label>
-                        <textarea
-                            value={asset.description}
-                            onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { description: e.target.value })}
-                            className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-zinc-300 text-sm leading-relaxed h-32 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
-                        />
-                    </div>
-
-                    {/* Visual DNA */}
-                    <div className="space-y-2">
-                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">视觉 DNA (提示词)</label>
-                        <textarea
-                            value={type === 'character' ? asset.consistency_seed_prompt : asset.visual_anchor_prompt}
-                            onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
-                            className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-40 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
-                        />
-                    </div>
-
-                    {/* Reference Images Gallery */}
-                    <div className="pt-8 border-t border-white/5 space-y-6">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">参考图库 / 形象确认</span>
-                            <label className="cursor-pointer bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-[#D4AF37] hover:text-black transition-all">
-                                <span>上传参考图</span>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    className="hidden"
-                                    onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
-                                />
-                            </label>
+                    {/* Right: Controls */}
+                    <div className="w-full md:w-1/2 h-full overflow-y-auto p-8 md:p-12 space-y-8 bg-[#050505]">
+                        {/* Header */}
+                        <div>
+                            <span className="text-[10px] font-black uppercase text-[#D4AF37] tracking-[0.4em] mb-2 block">{type === 'character' ? '角色资产' : '场景资产'}</span>
+                            <input
+                                value={asset.name}
+                                onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { name: e.target.value })}
+                                className="w-full bg-transparent border-none outline-none text-4xl font-black uppercase serif text-white placeholder-zinc-800"
+                            />
                         </div>
 
-                        {/* Confirmed / Active Reference */}
-                        <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl flex items-center gap-4">
-                            <label className="w-16 h-16 rounded-xl bg-zinc-900 border border-white/5 overflow-hidden flex-shrink-0 cursor-pointer hover:border-[#D4AF37]/50 transition-colors group relative">
-                                {asset.reference_image_url ? (
-                                    <img src={getProxiedUrl(asset.reference_image_url)} className="w-full h-full object-cover" alt="confirmed" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-[20px] transition-transform group-hover:scale-110">📸</div>
-                                )}
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-opacity">更换</div>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                            const reader = new FileReader();
-                                            reader.onloadend = () => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, reader.result as string);
-                                            reader.readAsDataURL(file);
-                                        }
-                                    }}
-                                />
-                            </label>
-                            <div className="flex-1 min-w-0">
-                                <h4 className="text-[10px] font-black text-white uppercase mb-1">已确认的视觉锚点</h4>
-                                <p className="text-[9px] text-zinc-500 truncate">{asset.reference_image_url ? '生成时将以此图为核心参考' : '尚未锁定形象，点击图标上传或从库中选择'}</p>
-                            </div>
-                            {asset.reference_image_url && (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">描述</label>
                                 <button
-                                    onClick={() => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { reference_image_url: undefined })}
-                                    className="p-2 text-zinc-600 hover:text-red-400 transition-colors"
-                                    title="清除确认形象"
+                                    onClick={() => onRefineDNA?.(asset.name, asset.description, type, type === 'character' ? asset.char_id : asset.scene_id)}
+                                    className="text-[9px] font-black uppercase text-[#D4AF37] hover:text-white transition-colors flex items-center gap-1.5 bg-[#D4AF37]/5 px-2.5 py-1 rounded-lg border border-[#D4AF37]/20"
                                 >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    提炼视觉 DNA
                                 </button>
-                            )}
+                            </div>
+                            <textarea
+                                value={asset.description}
+                                onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { description: e.target.value })}
+                                className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-zinc-300 text-sm leading-relaxed h-32 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
+                            />
                         </div>
 
-                        {/* Gallery Grid */}
-                        <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                            {(asset.candidate_reference_images || []).map((imgUrl: string, idx: number) => (
-                                <div key={idx} className="group relative aspect-square rounded-xl bg-zinc-900 border border-white/5 overflow-hidden">
-                                    <img src={getProxiedUrl(imgUrl)} className="w-full h-full object-cover" alt={`ref-${idx}`} />
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1">
-                                        <button
-                                            onClick={() => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
-                                            className="p-1.5 bg-[#D4AF37] text-black rounded-lg hover:scale-110 transition-transform"
-                                            title="设为确认形象"
-                                        >
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                        </button>
-                                        <button
-                                            onClick={() => onRemoveReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
-                                            className="p-1.5 bg-red-500/80 text-white rounded-lg hover:scale-110 transition-transform"
-                                            title="删除"
-                                        >
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
-                                        </button>
-                                    </div>
-                                    {imgUrl === asset.reference_image_url && (
-                                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37] shadow-[0_0_5px_#D4AF37]" />
-                                    )}
-                                </div>
-                            ))}
-                            <label className="aspect-square rounded-xl border border-dashed border-zinc-800 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors group">
-                                <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                <span className="text-[8px] text-zinc-700 group-hover:text-zinc-500 uppercase font-black">添加</span>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
-                                />
-                            </label>
+                        {/* Visual DNA */}
+                        <div className="space-y-2">
+                            <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">视觉 DNA (提示词)</label>
+                            <textarea
+                                value={type === 'character' ? asset.consistency_seed_prompt : asset.visual_anchor_prompt}
+                                onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
+                                className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-40 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
+                            />
                         </div>
-                    </div>
 
-                    {/* Advanced Prompt Editor */}
-                    <PromptEditor
-                        defaultPrompt={defaultPrompt}
-                        onRegenerate={(p) => onRegenerate(type === 'character' ? asset.char_id : asset.scene_id, p)}
-                        isRendering={isRendering}
-                        label="高级生成设置"
-                    />
-
-                    {/* Voice Cloning (Character Only) */}
-                    {type === 'character' && onUploadAudio && onCloneVoice && (
-                        <div className="pt-8 border-t border-white/5 space-y-4">
-                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">声音克隆</span>
-
-                            <div className="flex gap-4">
-                                <label className="flex-1 cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex flex-col items-center justify-center p-6 transition-all group">
-                                    <input type="file" accept="audio/*" className="hidden" onChange={(e) => onUploadAudio(e, asset.char_id)} />
-                                    <span className="text-zinc-400 text-xs mb-1 group-hover:text-white">参考音频</span>
-                                    {asset.voice_ref_audio_url ? (
-                                        <span className="text-[#D4AF37] text-[10px] font-bold">已上传 ✓</span>
-                                    ) : (
-                                        <span className="text-zinc-600 text-[10px]">上传 mp3/wav</span>
-                                    )}
-                                </label>
-
-                                <div className="flex-[2] space-y-2">
-                                    <textarea
-                                        value={asset.voice_sample_text || ''}
-                                        onChange={e => onUpdate(asset.char_id, { voice_sample_text: e.target.value })}
-                                        placeholder="用于声音样本的文字..."
-                                        className="w-full bg-white/5 p-3 rounded-xl border border-white/10 text-xs text-zinc-300 h-[86px] resize-none outline-none"
+                        {/* Reference Images Gallery */}
+                        <div className="pt-8 border-t border-white/5 space-y-6">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">参考图库 / 形象确认</span>
+                                <label className="cursor-pointer bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-[#D4AF37] hover:text-black transition-all">
+                                    <span>上传参考图</span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
                                     />
-                                </div>
+                                </label>
                             </div>
 
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={() => onCloneVoice(asset.char_id, asset.voice_ref_audio_url, asset.voice_sample_text!)}
-                                    disabled={isCloning || !asset.voice_ref_audio_url || !asset.voice_sample_text}
-                                    className="px-6 py-3 bg-[#D4AF37] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-bold uppercase text-xs rounded-xl hover:bg-white transition-colors flex-shrink-0"
-                                >
-                                    {isCloning ? '克隆中...' : '生成声音'}
-                                </button>
-                                {asset.voice_preview_url && <audio controls src={getProxiedUrl(asset.voice_preview_url)} className="h-10 w-full" />}
+                            {/* Confirmed / Active Reference */}
+                            <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl flex items-center gap-4">
+                                <label className="w-16 h-16 rounded-xl bg-zinc-900 border border-white/5 overflow-hidden flex-shrink-0 cursor-pointer hover:border-[#D4AF37]/50 transition-colors group relative">
+                                    {asset.reference_image_url ? (
+                                        <img src={getProxiedUrl(asset.reference_image_url)} className="w-full h-full object-cover" alt="confirmed" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-[20px] transition-transform group-hover:scale-110">📸</div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-opacity">更换</div>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, reader.result as string);
+                                                reader.readAsDataURL(file);
+                                            }
+                                        }}
+                                    />
+                                </label>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-[10px] font-black text-white uppercase mb-1">已确认的视觉锚点</h4>
+                                    <p className="text-[9px] text-zinc-500 truncate">{asset.reference_image_url ? '生成时将以此图为核心参考' : '尚未锁定形象，点击图标上传或从库中选择'}</p>
+                                </div>
+                                {asset.reference_image_url && (
+                                    <button
+                                        onClick={() => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { reference_image_url: undefined })}
+                                        className="p-2 text-zinc-600 hover:text-red-400 transition-colors"
+                                        title="清除确认形象"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Gallery Grid */}
+                            <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                {(asset.candidate_reference_images || []).map((imgUrl: string, idx: number) => (
+                                    <div key={idx} className="group relative aspect-square rounded-xl bg-zinc-900 border border-white/5 overflow-hidden">
+                                        <img src={getProxiedUrl(imgUrl)} className="w-full h-full object-cover" alt={`ref-${idx}`} />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1">
+                                            <button
+                                                onClick={() => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
+                                                className="p-1.5 bg-[#D4AF37] text-black rounded-lg hover:scale-110 transition-transform"
+                                                title="设为确认形象"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            </button>
+                                            <button
+                                                onClick={() => onRemoveReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
+                                                className="p-1.5 bg-red-500/80 text-white rounded-lg hover:scale-110 transition-transform"
+                                                title="删除"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+                                        {imgUrl === asset.reference_image_url && (
+                                            <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37] shadow-[0_0_5px_#D4AF37]" />
+                                        )}
+                                    </div>
+                                ))}
+                                <label className="aspect-square rounded-xl border border-dashed border-zinc-800 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors group">
+                                    <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                    <span className="text-[8px] text-zinc-700 group-hover:text-zinc-500 uppercase font-black">添加</span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
+                                    />
+                                </label>
                             </div>
                         </div>
-                    )}
+
+                        {/* Advanced Prompt Editor */}
+                        <PromptEditor
+                            defaultPrompt={defaultPrompt}
+                            onRegenerate={(p) => onRegenerate(type === 'character' ? asset.char_id : asset.scene_id, p)}
+                            isRendering={isRendering}
+                            label="高级生成设置"
+                        />
+
+                        {/* Voice Cloning (Character Only) */}
+                        {type === 'character' && onUploadAudio && onCloneVoice && (
+                            <div className="pt-8 border-t border-white/5 space-y-4">
+                                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">声音克隆</span>
+
+                                <div className="flex gap-4">
+                                    <label className="flex-1 cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex flex-col items-center justify-center p-6 transition-all group">
+                                        <input type="file" accept="audio/*" className="hidden" onChange={(e) => onUploadAudio(e, asset.char_id)} />
+                                        <span className="text-zinc-400 text-xs mb-1 group-hover:text-white">参考音频</span>
+                                        {asset.voice_ref_audio_url ? (
+                                            <span className="text-[#D4AF37] text-[10px] font-bold">已上传 ✓</span>
+                                        ) : (
+                                            <span className="text-zinc-600 text-[10px]">上传 mp3/wav</span>
+                                        )}
+                                    </label>
+
+                                    <div className="flex-[2] space-y-2">
+                                        <textarea
+                                            value={asset.voice_sample_text || ''}
+                                            onChange={e => onUpdate(asset.char_id, { voice_sample_text: e.target.value })}
+                                            placeholder="用于声音样本的文字..."
+                                            className="w-full bg-white/5 p-3 rounded-xl border border-white/10 text-xs text-zinc-300 h-[86px] resize-none outline-none"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => onCloneVoice(asset.char_id, asset.voice_ref_audio_url, asset.voice_sample_text!)}
+                                        disabled={isCloning || !asset.voice_ref_audio_url || !asset.voice_sample_text}
+                                        className="px-6 py-3 bg-[#D4AF37] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-bold uppercase text-xs rounded-xl hover:bg-white transition-colors flex-shrink-0"
+                                    >
+                                        {isCloning ? '克隆中...' : '生成声音'}
+                                    </button>
+                                    {asset.voice_preview_url && <audio controls src={getProxiedUrl(asset.voice_preview_url)} className="h-10 w-full" />}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
 /* --- Main Component --- */
 
@@ -347,6 +381,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({
     onReRenderCharacter,
     onReRenderScene,
     onGenerateAll,
+    onRefineDNA,
     isGenerating
 }) => {
     const globalContext = useProjectStore((state) => state.globalContext);
@@ -358,8 +393,25 @@ const AssetManager: React.FC<AssetManagerProps> = ({
     const [renderingId, setRenderingId] = useState<string | null>(null);
     const [cloningId, setCloningId] = useState<string | null>(null);
 
-    const { setIsAnalyzing, setStatusMessage, showToast } = useUIStore();
     const { script, projectMetadata, storyboard } = useProjectStore();
+    const addCharacterStore = useProjectStore((state) => state.addCharacter);
+    const addSceneStore = useProjectStore((state) => state.addScene);
+
+    const [isCreating, setIsCreating] = useState<'character' | 'scene' | null>(null);
+    const [newName, setNewName] = useState('');
+
+    const handleCreateAsset = () => {
+        if (!newName.trim()) return;
+        let id = '';
+        if (isCreating === 'character') {
+            id = addCharacterStore(newName);
+        } else {
+            id = addSceneStore(newName);
+        }
+        setSelectedAsset({ type: isCreating, id });
+        setIsCreating(null);
+        setNewName('');
+    };
 
     const handleExport = async () => {
         setIsAnalyzing(true);
@@ -528,7 +580,16 @@ const AssetManager: React.FC<AssetManagerProps> = ({
 
             {/* Scenes Grid */}
             <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37] mb-8 pl-1">场景</h3>
+                <div className="flex items-center justify-between mb-8 pl-1">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">场景</h3>
+                    <button
+                        onClick={() => setIsCreating('scene')}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[9px] text-zinc-500 hover:text-[#D4AF37] hover:bg-white/10 hover:border-[#D4AF37]/30 transition-all font-bold uppercase tracking-widest"
+                    >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        手动添加场景
+                    </button>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {globalContext.scenes.map(scene => (
                         <AssetCard
@@ -543,7 +604,16 @@ const AssetManager: React.FC<AssetManagerProps> = ({
 
             {/* Characters Grid */}
             <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37] mb-8 pl-1">角色</h3>
+                <div className="flex items-center justify-between mb-8 pl-1">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-[#D4AF37]">角色</h3>
+                    <button
+                        onClick={() => setIsCreating('character')}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[9px] text-zinc-500 hover:text-[#D4AF37] hover:bg-white/10 hover:border-[#D4AF37]/30 transition-all font-bold uppercase tracking-widest"
+                    >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                        手动添加角色
+                    </button>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {globalContext.characters.map(char => (
                         <AssetCard
@@ -570,9 +640,51 @@ const AssetManager: React.FC<AssetManagerProps> = ({
                     onSetAsReference={handleSetAsReference}
                     onRemoveReference={handleRemoveReference}
                     onCloneVoice={handleCloneVoice}
+                    onRefineDNA={onRefineDNA}
                     isCloning={cloningId === selectedAsset.id}
                     stylePreset={globalContext.visual_style_preset}
                 />
+            )}
+
+            {/* Creation Modal */}
+            {isCreating && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+                    <div className="bg-[#121212] border border-white/10 p-8 rounded-3xl w-full max-w-md shadow-2xl">
+                        <h3 className="text-xl font-bold text-white mb-2">添加新{isCreating === 'character' ? '角色' : '场景'}</h3>
+                        <p className="text-zinc-500 text-sm mb-6">请输入名称，手动添加后可在分镜生成中选择</p>
+
+                        <input
+                            autoFocus
+                            type="text"
+                            placeholder="例如：林深 / 秘密基地"
+                            className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white text-sm focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] outline-none mb-6"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleCreateAsset();
+                            }}
+                        />
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setIsCreating(null);
+                                    setNewName('');
+                                }}
+                                className="px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleCreateAsset}
+                                disabled={!newName.trim()}
+                                className="px-8 py-2 bg-[#D4AF37] hover:bg-[#F0D060] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-bold rounded-xl transition-all shadow-lg active:scale-95"
+                            >
+                                确认添加
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

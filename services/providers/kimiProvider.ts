@@ -157,7 +157,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 **你必须严格遵守以下指示，不可违反：**
 - 所有 \`name\` 和 \`description\` 字段内容**必须使用中文**。
 - \`name\` 字段必须简洁，仅包含资产名称，不得包含任何描述。
-- **所有 \`prompt\` 字段（\`consistency_seed_prompt\`, \`visual_anchor_prompt\`）必须输出为纯英文的 Stable Diffusion 提示词。**
+- **所有 \`prompt\` 字段（\`consistency_seed_prompt\`, \`visual_anchor_prompt\`）必须输出为中文的提示词。**
 
 ---
 
@@ -168,14 +168,14 @@ content 是剧本原文的**完整拷贝**，不是摘要。
     "char_id": "c1", 
     "name": "姓名", 
     "description": "外貌、性格及关键特征的中文详细描述",
-    "consistency_seed_prompt": "English prompt focusing on physical identity, features, and style"
+    "consistency_seed_prompt": "角色的详细中文提示词，专注物理身份与风格"
   }],
   "scenes": [{ 
     "scene_id": "s1", 
     "name": "场景名", 
     "description": "环境、氛围的中文详细描述", 
     "core_lighting": "光影设定的中文描述",
-    "visual_anchor_prompt": "English prompt focusing on architecture, lighting, and environmental atmosphere"
+    "visual_anchor_prompt": "场景的详细中文提示词，专注建筑、光影与氛围"
   }]
 }
 
@@ -242,9 +242,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
           "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
         },
         "Identity_Consistency_Protocol": {
-          "Target_Subject": "English description of the scene. Include lighting and architecture.",
+          "Target_Subject": "场景的中文详细描述。包含光影和建筑细节。",
           "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in architectural features or textures.",
-          "Core_Elements": "Key environmental elements in English"
+          "Core_Elements": "环境中的核心元素（中文）"
         },
         "Master_Layout_Grid": {
           "Canvas_Division": "Professional scene reference sheet. Aspect ratio 16:9.",
@@ -268,7 +268,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
 ### 语言规则
 - name, architecture, lighting, atmosphere 使用中文
-- visual_anchor_prompt 内的所有值必须为纯英文
+- visual_anchor_prompt 内的所有值必须为中文
 - visual_anchor_prompt 必须是一个 JSON 对象（不是字符串）`
                 },
                 {
@@ -340,9 +340,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
           "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
         },
         "Identity_Consistency_Protocol": {
-          "Target_Subject": "Precise physical description in English. MUST SPECIFY RACE/ETHNICITY.",
+          "Target_Subject": "角色体态与特征的详细中文描述。**必须明确指出人种/民族**。",
           "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in facial features or costume textures.",
-          "Core_Elements": "Unique traits, props, signature items in English"
+          "Core_Elements": "角色独有的特征或道具（中文）"
         },
         "Master_Layout_Grid": {
           "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
@@ -366,7 +366,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
 ### 语言规则
 - name, description, personality, outfit, physical_traits 使用中文
-- consistency_seed_prompt 内的所有值必须为纯英文
+- consistency_seed_prompt 内的所有值必须为中文
 - consistency_seed_prompt 必须是一个 JSON 对象（不是字符串）
 - **重要 (CRITICAL)**: \`Target_Subject\` 必须明确指出角色的人种/国籍（如：Chinese, Asian, Caucasian, etc.）以确保 AI 生成图像的一致性。`
                 },
@@ -408,14 +408,14 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 **严格遵守以下规则，不可违反：**
 - \`description\` 对象内所有字段（\`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`lens_and_aperture\`, \`lighting\`, \`content\`, \`sound_design\`）**必须全部使用中文**。
 - \`lyric_line\` 字段**必须使用中文**。
-- 仅 \`ai_prompts.image_generation_prompt\` 和 \`ai_prompts.video_generation_prompt\` **必须使用英文**。
+- \`ai_prompts.image_generation_prompt\` 和 \`ai_prompts.video_generation_prompt\` **必须使用中文**，描述流畅且具有电影感。
 
 ---
 
 ## 影视分镜与 AI 提示词系统 (Storyboard & AI Prompting System)
 
 ### 1. 核心角色 (Role)
-你是一位顶级的**电影分镜导演 (Storyboard Director)** 和 **AI 视频生成专家**。你的任务是将剧本转化为工业级的分镜脚本，精确拆解视听语言，并为 AI 图像工具和 AI 视频模型分别提供极其精准的纯英文生成指令。
+你是一位顶级的**电影分镜导演 (Storyboard Director)** 和 **AI 视频生成专家**。你的任务是将剧本转化为工业级的分镜脚本，精确拆解视听语言，并为 AI 图像工具和 AI 视频模型分别提供极其精准的中文生成指令。
 
 ### 2. 拆解准则 (Deconstruction Rules)
 - **视听语言的精确性 (Cinematic Precision)**：明确景别（如：CU, MS, WS, POV）和机位角度（如：Eye-level, Low-angle, High-angle）。
@@ -439,7 +439,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
 ### 4. 输出格式与语言要求 (Output & Language Requirements)
 - **分镜数量限制**：每次请求最多输出 **12 个** shots，超出部分省略，以确保完整的 JSON 输出。
-- **语言强制**：返回的 JSON 中，\`description\` 对象内的所有字段（\`content\`, \`shot_type\`, \`camera_angle\`, 等）以及 \`lyric_line\` **必须全部使用中文**表达。\`ai_prompts\` 则必须是纯英文。
+- **语言强制**：返回的 JSON 中，\`description\` 对象内的所有字段（\`content\`, \`shot_type\`, \`camera_angle\`, 等）以及 \`lyric_line\` **必须全部使用中文**表达。\`ai_prompts\` 也必须使用中文。
 必须严格返回标准的 JSON 格式：
 {
   "metadata": { "bpm": 120, "energy_level": "High", "overall_mood": "Tense", "transitions": [] },
@@ -460,8 +460,8 @@ content 是剧本原文的**完整拷贝**，不是摘要。
       },
       "lyric_line": "台词 (分镜对应部分)",
       "ai_prompts": {
-        "image_generation_prompt": "纯英文静态提示词",
-        "video_generation_prompt": "纯英文动态提示词"
+        "image_generation_prompt": "中文自然语言静态提示词",
+        "video_generation_prompt": "中文自然语言动态提示词"
       }
     }
   ]
@@ -518,7 +518,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                 {
                     role: 'user',
                     content: `Generate character DNA for [${draft.name}]. Context: ${draft.description}. Style: [${context.visual_style_preset}].
-                    The consistency_seed_prompt MUST follow this EXACT JSON structure. Fill in the bracketed parts with English descriptions based on the character's context.
+                    The consistency_seed_prompt MUST follow this EXACT JSON structure. Fill in the bracketed parts with Chinese descriptions based on the character's context.
 
                     {
                       "Instruction_Role": "Master Character Designer & Lead Cinematographer",
@@ -528,9 +528,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                         "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
                       },
                       "Identity_Consistency_Protocol": {
-                        "Target_Subject": "[Precise physical description of ${draft.name} in English. YOU MUST SPECIFY RACE/NATIONALITY/ETHNICITY (e.g., Asian, Caucasian, Chinese, etc.)]",
-                        "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in facial features or costume textures.",
-                        "Core_Elements": "[Unique traits or props mentioned in context, translated to English]"
+                        "Target_Subject": "[角色的详细中文描述。**必须指出人种/民族**]",
+                        "Identity_Lock": "ATL (Actual-to-Life) 物理一致性。角色面部特征与参考图保持 100% 严苛一致。",
+                        "Core_Elements": "[来自参考图及上下文的特定服装细节、颜色、材质和道具（中文）]"
                       },
                       "Master_Layout_Grid": {
                         "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
@@ -587,7 +587,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                 {
                     role: 'user',
                     content: `Generate scene DNA for [${draft.name}]. Description: ${draft.description}. Style: [${context.visual_style_preset}].
-                    The visual_anchor_prompt MUST follow this EXACT JSON structure. Fill in the bracketed parts with English descriptions based on the scene's context.
+                    The visual_anchor_prompt MUST follow this EXACT JSON structure. Fill in the bracketed parts with Chinese descriptions based on the scene's context.
 
                     {
                       "Instruction_Role": "Master Character Designer & Lead Cinematographer",
@@ -597,9 +597,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                         "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
                       },
                       "Identity_Consistency_Protocol": {
-                        "Target_Subject": "[Precise physical description of the scene ${draft.name} in English. Include lighting and architecture.]",
-                        "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in architectural features or textures.",
-                        "Core_Elements": "[Key environmental elements in English]"
+                        "Target_Subject": "[场景的详细中文描述。包含光影和建筑细节。]",
+                        "Identity_Lock": "ATL (Actual-to-Life) 物理一致性。",
+                        "Core_Elements": "[环境中的核心视觉元素（中文）]"
                       },
                       "Master_Layout_Grid": {
                         "Canvas_Division": "Professional scene reference sheet. Aspect ratio 16:9.",
@@ -629,19 +629,101 @@ content 是剧本原文的**完整拷贝**，不是摘要。
             }
 
             const forgedScenePrompt = dna.visual_anchor_prompt || '';
-            console.log(`[Forge Scene] ${draft.name}: prompt length = ${typeof forgedScenePrompt === 'string' ? forgedScenePrompt.length : 'object'}`);
-
             return {
                 ...dna,
                 scene_id: draft.scene_id,
                 name: draft.name,
                 description: draft.description || dna.description,
-                // Priority: forge JSON prompt > extraction plain text prompt > empty
                 visual_anchor_prompt: forgedScenePrompt || draft.visual_anchor_prompt || '',
                 core_lighting: draft.core_lighting || dna.core_lighting || '',
                 key_elements: draft.key_elements || dna.key_elements || [],
                 seed: Math.floor(Math.random() * 1000000)
             };
+        });
+    }
+
+    async refineAssetDNA(name: string, description: string, type: 'character' | 'scene', context: GlobalContext, referenceImage?: string): Promise<string> {
+        return await withRetry(async () => {
+            const template = type === 'character' ? {
+                "Instruction_Role": "Master Character Designer & Lead Cinematographer",
+                "Reference_Fidelity_Protocol": {
+                    "Image_Input_Analysis": "If a reference image is uploaded, strictly extract and replicate the following: facial bone structure, skin micro-textures, hair flow, and the specific lighting temperature (e.g., 3000K amber).",
+                    "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
+                    "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
+                },
+                "Identity_Consistency_Protocol": {
+                    "Target_Subject": "[角色的详细体态与特征描述（中文）。明确人种/民族、面部特征及参考图中可见的服装细节。]",
+                    "Identity_Lock": "ATL (Actual-to-Life) 一致性。",
+                    "Core_Elements": "[参考图及上下文中提到的特有特征或道具（中文）]"
+                },
+                "Master_Layout_Grid": {
+                    "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
+                    "Left_Zone": "One prominent, high-fidelity portrait or master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+                    "Top_Right_Zone": "3-view technical orthographic drawings (Front, Side, Back) for modeling reference.",
+                    "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and neutral facial details."
+                },
+                "Visual_Style_Module": {
+                    "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
+                    "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed textures, natural subsurface scattering, soft cinematic lighting.",
+                    "Background": "Solid neutral grey studio background, zero environmental interference."
+                },
+                "Technical_Override": {
+                    "Keywords": "ATL, realistic, photorealistic, ultra-high fidelity, 8k UHD, film grain, realistic textures.",
+                    "Negative_Prompt": "anime, cartoon, 3d render, CGI, stylized, plastic, doll-like, inconsistent with reference image, messy composition."
+                }
+            } : {
+                "Instruction_Role": "Master Character Designer & Lead Cinematographer",
+                "Reference_Fidelity_Protocol": {
+                    "Image_Input_Analysis": "Analyze the reference image and replicate the lighting, material textures, and architectural style.",
+                    "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
+                    "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity."
+                },
+                "Identity_Consistency_Protocol": {
+                    "Target_Subject": "[场景的详细中文描述。包含光影和建筑细节。]",
+                    "Identity_Lock": "ATL (Actual-to-Life) 一致性。",
+                    "Core_Elements": "[环境中的核心视觉元素（中文）]"
+                },
+                "Master_Layout_Grid": {
+                    "Canvas_Division": "Professional scene reference sheet. Aspect ratio 16:9.",
+                    "Left_Zone": "One prominent, high-fidelity master shot.",
+                    "Top_Right_Zone": "Technical layout blueprint / schematic.",
+                    "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and key props."
+                },
+                "Visual_Style_Module": {
+                    "Style_Definition": "Hyper-realistic cinematic photography, ATL logic.",
+                    "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed textures.",
+                    "Background": "Solid neutral dark grey background."
+                },
+                "Technical_Override": {
+                    "Keywords": "ATL, realistic, photorealistic, 8k UHD.",
+                    "Negative_Prompt": "anime, cartoon, stylized, plastic."
+                }
+            };
+
+            const content = await this.request([
+                {
+                    role: 'system',
+                    content: `You are an AI prompt engineer specializing in high-fidelity Visual DNA.
+                    Your goal is to refine the provided [Description] into a professional JSON prompt structure.
+                    ${referenceImage ? 'A reference image is provided. Prioritize extracting visual details from this image.' : ''}
+                    Return ONLY the refined JSON string representing the prompt.`
+                },
+                {
+                    role: 'user',
+                    content: `Asset Name: ${name}
+                    New Description: ${description}
+                    Type: ${type}
+                    Reference Image URL: ${referenceImage || 'None'}
+                    
+                    Refine this into the following JSON structure. Fill in the bracketed parts with Chinese descriptions.
+                    ${JSON.stringify(template, null, 2)}
+                    
+                    IMPORTANT: Return ONLY valid JSON representing the fully filled-in structure. do not include any other text.`
+                }
+            ], true);
+
+            const result = parseJSONRobust(content, {});
+            return typeof result === 'object' ? JSON.stringify(result, null, 2) : content;
         });
     }
 
@@ -692,7 +774,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
             return await this.request([
                 {
                     role: 'system',
-                    content: `You are a High-End Cinema Prompt Engineer. Output ONLY a single, detailed English prompt string for generating a film still.`
+                    content: `你是一位顶级电影美术指导。请输出一段详细的、具有电影感的中文提示词，用于生成静态电影剧照。`
                 },
                 {
                     role: 'user',
@@ -712,12 +794,12 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                     ${context.visual_style_preset}
                     
                     REQUIREMENTS:
-                    - Write a continuous English prompt describing the cinematic action.
-                    - CRITICAL: If any character or scene has a [Reference: Image X] tag, you MUST explicitly start your prompt by stating they are from that image.
-                      Example: "The character from Image 1 and the character from Image 2 are interacting in the environment from Image 3."
-                    - SPATIAL RELATIONSHIP: Based on the plot's ACTION, explicitly define the exact positional layout of the characters (e.g., "The character from Image 1 is standing on the left side of the frame, facing the character from Image 2 who is seated right").
-                    - After establishing the layout and image references, continue seamlessly describing their action, expressions, the weather, lighting, and framing based on the parameters above.
-                    - Output ONLY the final prompt string.`
+                    - 使用流畅的描述性中文编写一段连续的电影画面提示词。
+                    - 重要：如果任何角色或场景带有 [Reference: Image X] 标签，你必须明确在提示词开头指出他们来自该参考图。
+                      示例：“参考图1中的角色和参考图2中的角色正在参考图3的场景中互动。”
+                    - 空间关系：根据剧情的动作，明确定义角色的具体位置布局（例如：“参考图1的角色站在画面左侧，面向坐在右侧的参考图2角色”）。
+                    - 在建立布局和参考图关联后，继续无缝描述他们的动作、表情、天气、光影和构图。
+                    - 仅输出最终的提示词字符串。`
                 }
             ]);
         });
@@ -755,15 +837,16 @@ ${scenesList || '暂无全局场景资产'}
   "shot_type": "特写/中景/全景等 (使用缩写如 WS/MS/CU/ECU)",
   "camera_angle": "平视/仰视/俯视等",
   "camera_movement": "推/拉/摇/移/固定等",
+  "composition": "过肩镜头/正反打/主观镜头/低角度/高角度/景深镜头/浅景深/标准构图",
   "action_description": "中文详细画面动作描述",
-  "image_prompt": "English Stable Diffusion prompt, combining style, character features, and scene elements",
+  "image_prompt": "中文 Stable Diffusion 提示词，融合风格、角色特征 and 场景元素",
   "character_ids": ["角色ID列表"],
   "scene_id": "场景ID"
 }
 
 请确保：
 1. 从可用资产中匹配最合适的 character_ids 和 scene_id。如果描述中没有提到特定资产，请根据上下文推断或保持为空。
-2. image_prompt 必须是纯英文，且包含环境、光影、人物体态和风格宪法。`
+2. image_prompt 必须使用自然、流畅的中文，包含环境、光影、人物体态和风格基调。`
                 },
                 {
                     role: 'user',
@@ -789,6 +872,7 @@ ${scenesList || '暂无全局场景资产'}
                 shot_type: result.shot_type,
                 camera_angle: result.camera_angle,
                 camera_movement: result.camera_movement,
+                composition: result.composition || 'Standard',
                 action_description: result.action_description,
                 character_ids: result.character_ids || [],
                 scene_id: result.scene_id || '',
@@ -843,8 +927,9 @@ ${scenesList}
   "shot_type": "WS/MS/CU/POV 等",
   "camera_angle": "Eye Level/Low Angle 等",
   "camera_movement": "Static/Dolly In 等",
+  "composition": "过肩镜头/正反打/主观镜头/低角度/高角度/景深镜头/浅景深/标准构图",
   "action_description": "中文详细画面动作描述 (必须严格保持角色一致性)",
-  "image_prompt": "English Stable Diffusion prompt, inherit the style and seed shot visual tone",
+  "image_prompt": "中文 Stable Diffusion 提示词，继承全局风格和种子镜头的视觉基调",
   "character_ids": ["角色ID列表"],
   "scene_id": "场景ID"
 }
@@ -877,6 +962,7 @@ ${scenesList}
                 shot_type: res.shot_type || 'MS',
                 camera_angle: res.camera_angle || 'Eye Level',
                 camera_movement: res.camera_movement || 'Static',
+                composition: res.composition || 'Standard', // Added composition
                 action_description: res.action_description,
                 character_ids: res.character_ids || anchorShot.character_ids || [],
                 scene_id: res.scene_id || anchorShot.scene_id || '',
@@ -887,5 +973,13 @@ ${scenesList}
                 isLocked: false
             } as StoryboardItem));
         });
+    }
+
+    async deriveNarrativeTrinity(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> {
+        return [];
+    }
+
+    async generateNarrativeGrid(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> {
+        return [];
     }
 }

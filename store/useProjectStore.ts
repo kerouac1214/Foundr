@@ -40,6 +40,8 @@ interface ProjectState {
 
     // Actions
     resetProject: () => void;
+    addCharacter: (name: string) => string;
+    addScene: (name: string) => string;
 }
 
 const INITIAL_CONTEXT: GlobalContext = {
@@ -166,7 +168,50 @@ export const useProjectStore = create<ProjectState>()(
                 projectMetadata: null,
                 storyboard: [],
                 selectedChapterId: null
-            })
+            }),
+
+            addCharacter: (name) => {
+                const id = generateId();
+                const newChar: CharacterDNA = {
+                    char_id: id,
+                    name,
+                    is_anchored: false,
+                    description: '',
+                    physical_core: { gender_age: '', facial_features: '', hair_style: '', distinguishing_marks: '' },
+                    costume_id: { top: '', bottom: '', accessories: '' },
+                    consistency_seed_prompt: '',
+                    seed: Math.floor(Math.random() * 1000000)
+                };
+                set((state) => ({
+                    globalContext: {
+                        ...state.globalContext,
+                        characters: [...state.globalContext.characters, newChar]
+                    }
+                }));
+                return id;
+            },
+
+            addScene: (name) => {
+                const id = generateId();
+                const newScene: SceneDNA = {
+                    scene_id: id,
+                    name,
+                    description: '',
+                    narrative_importance: 'Transition',
+                    relevant_scene_ids: [],
+                    visual_anchor_prompt: '',
+                    core_lighting: '',
+                    key_elements: [],
+                    seed: Math.floor(Math.random() * 1000000)
+                };
+                set((state) => ({
+                    globalContext: {
+                        ...state.globalContext,
+                        scenes: [...state.globalContext.scenes, newScene]
+                    }
+                }));
+                return id;
+            }
         }),
         {
             name: 'foundr-project-storage',

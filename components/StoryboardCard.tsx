@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { StoryboardItem, GlobalContext } from '../types';
-import { VIDEO_ENGINES } from '../constants';
+import { VIDEO_ENGINES, SHOT_TYPES, CAMERA_MOVEMENTS, COMPOSITION_SHOTS } from '../constants';
 
 interface StoryboardCardProps {
   item: StoryboardItem;
@@ -17,23 +17,8 @@ interface StoryboardCardProps {
   onDerive?: () => void;
 }
 
-const SHOT_TYPES = [
-  { value: 'CU', label: '特写' },
-  { value: 'MS', label: '中景' },
-  { value: 'LS', label: '全景' },
-  { value: 'POV', label: '主观视角' }
-] as const;
-
-const CAMERA_MOVEMENTS = [
-  { value: 'Fixed', label: '固定' },
-  { value: 'Dolly In', label: '推' },
-  { value: 'Dolly Out', label: '拉' },
-  { value: 'Pan', label: '摇' },
-  { value: 'Tilt', label: '移' },
-  { value: 'Orbit', label: '环绕' },
-] as const;
-
 const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate, onRenderPhoto, onRenderCandidates, onRenderVideo, onDerive, mode = 'visual', layout = 'list', viewMode, onImageClick }) => {
+  const [isPromptExpanded, setIsPromptExpanded] = React.useState(false);
   const aspectRatioClass = context.aspect_ratio === '16:9' ? 'aspect-video' :
     context.aspect_ratio === '9:16' ? 'aspect-[9/16]' : 'aspect-[4/3]';
 
@@ -97,10 +82,21 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             </select>
 
             <select
+              title="构图与关系镜头"
+              value={item.composition || 'Standard'}
+              onChange={(e) => onUpdate({ ...item, composition: e.target.value })}
+              className="px-4 py-1.5 bg-black/80 hover:bg-black rounded-full text-[10px] font-bold uppercase tracking-widest border border-[#D4AF37]/40 text-emerald-400 backdrop-blur-xl outline-none cursor-pointer transition-all max-w-[140px] truncate"
+            >
+              {COMPOSITION_SHOTS.map(cs => (
+                <option key={cs.value} value={cs.value} title={cs.desc} className="bg-zinc-900">{cs.label}</option>
+              ))}
+            </select>
+
+            <select
               title="所属场景"
               value={item.scene_id || ''}
               onChange={(e) => onUpdate({ ...item, scene_id: e.target.value })}
-              className="px-4 py-1.5 bg-black/80 hover:bg-black rounded-full text-[10px] font-bold uppercase tracking-widest border border-[#D4AF37]/40 text-zinc-300 backdrop-blur-xl outline-none cursor-pointer transition-all max-w-[120px] truncate"
+              className="px-4 py-1.5 bg-black/80 hover:bg-black rounded-full text-[10px] font-bold uppercase tracking-widest border border-[#D4AF37]/40 text-zinc-300 backdrop-blur-xl outline-none cursor-pointer transition-all max-w-[140px] truncate"
             >
               <option value="" className="bg-zinc-900">自动场景</option>
               {context.scenes.map(s => (
@@ -112,18 +108,6 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
           <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
             {item.render_status === 'rendering' && <div className="w-5 h-5 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />}
             {item.isLocked && <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center"><svg className="w-3.5 h-3.5 text-black" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg></div>}
-
-            {/* Inference from Seed Button - Only shown when FINISHED (preview_url exists) */}
-            {item.preview_url && onDerive && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onDerive(); }}
-                className="px-3 py-1 bg-[#D4AF37] hover:bg-white text-black rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg transition-all border border-[#D4AF37] active:scale-90 flex items-center gap-1.5"
-                title="以该镜头为基准推导前后关联镜头"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                推导关联
-              </button>
-            )}
 
             <div className="px-3 py-1 bg-black/60 rounded-full text-[9px] font-black tracking-tighter border border-white/10 backdrop-blur-sm text-white/50">#{item.shot_number}</div>
           </div>
@@ -144,6 +128,17 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             >
               {SHOT_TYPES.map(st => (
                 <option key={st.value} value={st.value} className="bg-zinc-900">{st.label}</option>
+              ))}
+            </select>
+
+            <select
+              title="构图与关系镜头"
+              value={item.composition || 'Standard'}
+              onChange={(e) => onUpdate({ ...item, composition: e.target.value })}
+              className="px-4 py-1.5 bg-white/5 hover:bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10 text-emerald-400 outline-none cursor-pointer transition-all"
+            >
+              {COMPOSITION_SHOTS.map(cs => (
+                <option key={cs.value} value={cs.value} title={cs.desc} className="bg-zinc-900">{cs.label}</option>
               ))}
             </select>
 
@@ -218,6 +213,36 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
           </div>
         </div>
 
+        {/* Prompt Editor Section */}
+        <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setIsPromptExpanded(!isPromptExpanded)}
+              className="flex items-center gap-2 text-[9px] text-zinc-500 font-bold uppercase tracking-widest hover:text-[#D4AF37] transition-colors"
+            >
+              <svg className={`w-3 h-3 transition-transform ${isPromptExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              {viewMode === 'videos_only' ? '视频生产提示词' : 'AI 提示词'} (可手动编辑)
+            </button>
+            {(viewMode === 'videos_only' ? item.video_prompt : item.image_prompt) && (
+              <span className="text-[8px] text-emerald-500/80 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">已编辑</span>
+            )}
+          </div>
+
+          <div className={`overflow-hidden transition-all duration-300 ${isPromptExpanded ? 'max-h-40 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+            <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+              <textarea
+                value={viewMode === 'videos_only'
+                  ? (item.video_prompt || item.ai_prompts?.video_generation_prompt || '')
+                  : (item.image_prompt || item.ai_prompts?.image_generation_prompt || '')}
+                onChange={(e) => onUpdate(viewMode === 'videos_only' ? { video_prompt: e.target.value } : { image_prompt: e.target.value })}
+                placeholder={viewMode === 'videos_only' ? "在此编辑用于视频生成的提示词..." : "在此编辑用于生图的提示词..."}
+                className="w-full bg-transparent border-none outline-none text-[11px] text-[#D4AF37]/80 leading-relaxed min-h-[80px] scrollbar-thin scrollbar-thumb-white/10"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-600 mt-1 italic">提示：编辑此框后，“渲染”将优先使用此处内容。</p>
+          </div>
+        </div>
+
         <div className="flex justify-between items-center mt-auto pt-4 gap-2 border-t border-white/10">
           <button
             onClick={toggleLock}
@@ -244,26 +269,25 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
 
                 {(!viewMode || viewMode === 'videos_only') && (
                   <>
-                    {/* Per-card Video Engine Selector */}
-                    <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5 h-10">
-                      <button
-                        onClick={() => onUpdate({ video_engine: undefined })}
-                        className={`px-2 h-full rounded-lg transition-all text-[9px] font-bold uppercase ${!item.video_engine ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        title="默认引擎"
-                      >
-                        默认
-                      </button>
+                    <button
+                      onClick={onRenderPhoto}
+                      className="px-3 h-10 flex items-center justify-center gap-2 bg-white/5 hover:bg-white text-zinc-200 hover:text-black rounded-xl transition-all border border-white/10 text-[10px] font-bold uppercase tracking-wider"
+                      title="重新生成此镜头"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      重新生成
+                    </button>
+
+                    <select
+                      value={item.video_engine || (item.lyric_line ? 'seedance_1_5' : (context.video_engine || 'wan2_2'))}
+                      onChange={(e) => onUpdate({ video_engine: e.target.value as any })}
+                      className="bg-white/5 border border-white/10 rounded-xl px-2 py-1 text-[10px] text-zinc-300 outline-none h-10 hover:border-[#D4AF37]/30 transition-colors cursor-pointer"
+                      title="选择视频生成模型"
+                    >
                       {VIDEO_ENGINES.map(engine => (
-                        <button
-                          key={engine.value}
-                          onClick={() => onUpdate({ video_engine: engine.value as any })}
-                          className={`px-2 h-full rounded-lg transition-all text-[9px] font-bold uppercase ${item.video_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
-                          title={engine.desc}
-                        >
-                          {engine.label.slice(0, 5)}
-                        </button>
+                        <option key={engine.value} value={engine.value} className="bg-zinc-900">{engine.label}</option>
                       ))}
-                    </div>
+                    </select>
 
                     <button
                       disabled={item.video_status === 'generating'}

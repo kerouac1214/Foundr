@@ -44,6 +44,33 @@ export const VIDEO_ENGINES: { label: string; value: AIEngine; desc: string }[] =
     { label: 'See Dance 1.5', value: 'seedance_1_5', desc: '原生 API' }
 ];
 
+export const SHOT_TYPES = [
+    { value: 'CU', label: '特写' },
+    { value: 'MS', label: '中景' },
+    { value: 'LS', label: '全景' },
+    { value: 'POV', label: '主观视角' }
+] as const;
+
+export const CAMERA_MOVEMENTS = [
+    { value: 'Fixed', label: '固定' },
+    { value: 'Dolly In', label: '推' },
+    { value: 'Dolly Out', label: '拉' },
+    { value: 'Pan', label: '摇' },
+    { value: 'Tilt', label: '移' },
+    { value: 'Orbit', label: '环绕' },
+] as const;
+
+export const COMPOSITION_SHOTS = [
+    { value: 'Standard', label: '标准构图', desc: '常规镜头' },
+    { value: 'OTS', label: '过肩镜头 (OTS)', desc: '从一个人肩膀后拍另一个人。拍对话最常用，自然、有互动感。' },
+    { value: 'Reverse Shot', label: '正反打', desc: 'A→B→A→B 交替切。标准对话镜头，观众最习惯。' },
+    { value: 'POV', label: '主观镜头 (POV)', desc: '以角色眼睛看出去。代入感、惊吓、窥视。' },
+    { value: 'Low Angle', label: '低角度', desc: '从下往上拍。权力、强大、压迫、英雄感。' },
+    { value: 'High Angle', label: '高角度', desc: '从上往下拍。弱势、孤独、上帝视角。' },
+    { value: 'Deep Focus', label: '景深镜头', desc: '前景、中景、背景都清晰。同时展示多层信息。' },
+    { value: 'Shallow Focus', label: '浅景深', desc: '人清晰，背景模糊。突出主体、唯美、电影感。' },
+] as const;
+
 export const EXAMPLE_SCRIPTS = [
     {
         name: '🎬 科幻短片',

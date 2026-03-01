@@ -21,10 +21,13 @@ export interface ScriptProvider {
     extractAssets(script: string, context: GlobalContext, engine?: AIEngine): Promise<{ characters: any[], scenes: any[] }>;
     analyzeShotInsertion(description: string, context: GlobalContext, surroundingShots: StoryboardItem[]): Promise<StoryboardItem>;
     deriveShotsFromAnchor(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
+    deriveNarrativeTrinity(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
+    generateNarrativeGrid(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
     structureEpisodes(script: string): Promise<{ status: ProjectStatus, episodes: Episode[] }>;
     generateStoryboard(script: string, characters: any[], scenes: any[]): Promise<{ metadata: ProjectMetadata, initial_script: any[] }>;
     forgeCharacterDNA(draft: any, context: GlobalContext): Promise<CharacterDNA>;
     forgeSceneDNA(draft: any, context: GlobalContext): Promise<SceneDNA>;
+    refineAssetDNA(name: string, description: string, type: 'character' | 'scene', context: GlobalContext, referenceImage?: string): Promise<string>;
     generateImagePrompt(
         item: StoryboardItem,
         characters: CharacterDNA[],

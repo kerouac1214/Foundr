@@ -165,6 +165,7 @@ export interface StoryboardItem {
   isLocked?: boolean;
   render_status?: 'idle' | 'rendering' | 'done';
   image_prompt?: string;
+  video_prompt?: string;
   composition?: string;
   reference_image_url?: string;
   candidate_image_urls?: string[];
