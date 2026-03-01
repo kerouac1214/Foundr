@@ -3,7 +3,7 @@ import { useProjectStore } from './store/useProjectStore';
 import { useUIStore } from './store/useUIStore';
 import { useAppWorkflow } from './hooks/useAppWorkflow';
 import { humanizeError } from './utils';
-import { ASPECT_RATIOS } from './constants';
+import { ASPECT_RATIOS, IMAGE_ENGINES, VIDEO_ENGINES } from './constants';
 import { updateProviderConfigs } from './services/providers';
 
 // Components
@@ -17,32 +17,36 @@ import Onboarding, { useOnboarding } from './components/Onboarding';
 import ProjectList from './components/ProjectList';
 import BatchProgressModal from './components/BatchProgressModal';
 import ErrorBoundary from './components/ErrorBoundary';
-import ScriptDashboard from './components/ScriptDashboard';
+import EpisodeDashboard from './components/EpisodeDashboard';
+import ChapterSidebar from './components/ChapterSidebar';
 
 const App: React.FC = () => {
-  // Store State
-  const {
-    script,
-    projectMetadata,
-    storyboard,
-    resetProject,
-    globalContext,
-    updateGlobalContext
-  } = useProjectStore();
+  // Store State (Reactive with Selectors)
+  const script = useProjectStore(s => s.script);
+  const setScript = useProjectStore(s => s.setScript);
+  const projectMetadata = useProjectStore(s => s.projectMetadata);
+  const storyboard = useProjectStore(s => s.storyboard);
+  const resetProject = useProjectStore(s => s.resetProject);
+  const globalContext = useProjectStore(s => s.globalContext);
+  const updateGlobalContext = useProjectStore(s => s.updateGlobalContext);
+  const selectedChapterId = useProjectStore(s => s.selectedChapterId);
+  const setSelectedChapterId = useProjectStore(s => s.setSelectedChapterId);
+  const updateChapterContent = useProjectStore(s => s.updateChapterContent);
 
-  const {
-    activeView,
-    setActiveView,
-    isAnalyzing,
-    progress,
-    statusMessage,
-    error,
-    setError,
-    toast,
-    hideToast,
-    batchProgress,
-    setBatchProgress
-  } = useUIStore();
+  // UI Store State (Individual Selectors for Stability)
+  const activeView = useUIStore(s => s.activeView);
+  const setActiveView = useUIStore(s => s.setActiveView);
+  const isAnalyzing = useUIStore(s => s.isAnalyzing);
+  const progress = useUIStore(s => s.progress);
+  const statusMessage = useUIStore(s => s.statusMessage);
+  const error = useUIStore(s => s.error);
+  const setError = useUIStore(s => s.setError);
+  const toast = useUIStore(s => s.toast);
+  const hideToast = useUIStore(s => s.hideToast);
+  const batchProgress = useUIStore(s => s.batchProgress);
+  const setBatchProgress = useUIStore(s => s.setBatchProgress);
+
+  console.log('App Rendering:', { activeView, hasScript: !!script, selectedChapterId, isAnalyzing });
 
   // Workflow Actions
   const {
@@ -59,12 +63,16 @@ const App: React.FC = () => {
     batchRenderAllVideos,
     handleMasterSynthesis,
     repairProjectAssets,
-    cancelBatch
+    cancelBatch,
+    handleFullScriptAnalysis,
+    handleInsertShot,
+    handleDeriveShots
   } = useAppWorkflow();
 
   // Local UI State
   const [showProjectList, setShowProjectList] = React.useState(false);
   const [imageLayout, setImageLayout] = React.useState<'list' | 'grid'>('grid');
+  const [showTimeline, setShowTimeline] = React.useState(true);
   const [masterPlayingIdx, setMasterPlayingIdx] = React.useState(0);
   const [previzActiveIdx, setPrevizActiveIdx] = React.useState(0);
   const videoPlayerRef = useRef<HTMLVideoElement>(null);
@@ -94,6 +102,17 @@ const App: React.FC = () => {
     }
   }, [globalContext.engine_configs]);
 
+  // Defensive: Clear selectedChapterId if it's invalid
+  React.useEffect(() => {
+    if (selectedChapterId) {
+      const chapterExists = projectMetadata?.chapters?.some(c => c.id === selectedChapterId);
+      if (!chapterExists) {
+        console.warn('App: selectedChapterId is invalid, clearing it.');
+        setSelectedChapterId(null);
+      }
+    }
+  }, [selectedChapterId, projectMetadata]);
+
   // Repair Assets on Load
   React.useEffect(() => {
     if (projectMetadata?.id) {
@@ -107,7 +126,7 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-director-dark text-director-text font-sans">
+      <div className="h-screen flex flex-col bg-director-dark text-director-text font-sans overflow-hidden">
         {/* Modern Header */}
         <header className="h-16 border-b border-gray-800 bg-director-dark/50 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-4">
@@ -120,6 +139,7 @@ const App: React.FC = () => {
 
           <nav className="flex items-center gap-1 bg-black/30 p-1 rounded-lg border border-gray-800">
             <button onClick={() => setActiveView('context')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'context' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>剧本</button>
+            <button onClick={() => setActiveView('episodes')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'episodes' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>分集</button>
             <button onClick={() => setActiveView('storyboard')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'storyboard' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>看板</button>
             <button onClick={() => setActiveView('foundry')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'foundry' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>资产</button>
             <div className="w-[1px] h-4 bg-gray-700 mx-1"></div>
@@ -133,106 +153,137 @@ const App: React.FC = () => {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
             </button>
             <button onClick={resetProject} className="text-[10px] font-bold text-gray-500 hover:text-red-400 px-3 py-1.5 transition-colors">重置</button>
-            {activeView === 'context' && (
-              <button
-                onClick={handleGenerateStoryboard}
-                disabled={isAnalyzing || !script}
-                className="director-button text-[10px] tracking-widest"
-              >
-                {isAnalyzing ? '分析中...' : '规划分镜'}
-              </button>
+            {(activeView === 'context' || activeView === 'episodes') && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const state = useProjectStore.getState();
+                    if (!state.script) {
+                      useUIStore.getState().showToast('请输入全剧本后再进行架构分析', 'error');
+                      return;
+                    }
+                    handleFullScriptAnalysis();
+                  }}
+                  disabled={isAnalyzing}
+                  className="px-4 py-1.5 bg-[#4F46E5] hover:bg-[#6366F1] text-white rounded-md text-[10px] font-bold tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                  title="Step 1：将长剧本切分为章节"
+                >
+                  {isAnalyzing ? '架构分析中...' : '全剧架构分析'}
+                </button>
+              </div>
             )}
-            {activeView === 'foundry' && (
+            {(activeView === 'foundry' || activeView === 'episodes') && (
               <button
                 onClick={handleExtractAssets}
                 disabled={isAnalyzing}
                 className="director-button text-[10px] tracking-widest"
+                title="Step 2：从全剧本中提取角色与场景资产"
               >
-                {isAnalyzing ? '提取中...' : '提取资产'}
+                {isAnalyzing ? '提取中...' : '提取资产 (Step 2)'}
               </button>
+            )}
+            {activeView === 'video_fragments' && (
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/5 mx-2">
+                {VIDEO_ENGINES.map(engine => (
+                  <button
+                    key={engine.value}
+                    onClick={() => updateGlobalContext({ video_engine: engine.value as any })}
+                    className={`px-3 py-1 rounded-md transition-all text-[9px] font-bold uppercase ${globalContext.video_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                    title={engine.desc}
+                  >
+                    {engine.label}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </header>
 
-        <main className="p-6 h-[calc(100vh-4rem)] overflow-hidden">
+        <main className="flex-1 overflow-hidden relative flex flex-col">
           {error && (
-            <div className="mb-6 bg-red-500/10 border border-red-500/20 p-4 rounded-lg flex items-center justify-between">
+            <div className="m-6 bg-red-500/10 border border-red-500/20 p-4 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-2">
               <span className="text-xs text-red-400">{humanizeError(error).message}</span>
               <button onClick={() => setError(null)} className="text-red-400 hover:text-white">✕</button>
             </div>
           )}
 
-          <div className="h-full flex gap-6 overflow-hidden">
-            {/* Left Sidebar Panle: Context/Script (Persistent in some views or switchable) */}
-            <div className={`w-[450px] flex-shrink-0 flex flex-col gap-6 overflow-y-auto transition-all ${activeView === 'context' ? 'flex-grow lg:flex-grow-0' : 'hidden lg:flex'}`}>
-              <div className="director-panel p-4 flex-grow flex flex-col gap-4">
-                <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-                  <h3 className="text-[10px] font-black tracking-widest text-gray-500 uppercase">导演剧本</h3>
-                </div>
-                <ScriptEditor />
-              </div>
-            </div>
+          <div className="flex-1 flex overflow-hidden">
+            {/* Chapter Sidebar (If in Full Script mode) */}
+            {projectMetadata?.chapters && projectMetadata.chapters.length > 0 && (activeView === 'context' || activeView === 'storyboard') && (
+              <ChapterSidebar
+                chapters={projectMetadata.chapters}
+                onSelectChapter={setSelectedChapterId}
+                onGenerateChapter={handleGenerateStoryboard}
+                isAnalyzing={isAnalyzing}
+              />
+            )}
 
-            {/* Main Stage Panel */}
-            <div className="flex-grow director-panel p-6 flex flex-col overflow-hidden relative">
-              <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-                <div>
-                  <h2 className="text-xl font-bold italic text-white uppercase tracking-tighter">
-                    {activeView === 'context' && '制片与分析'}
-                    {activeView === 'storyboard' && '导演看板'}
-                    {activeView === 'foundry' && '资产清单'}
-                    {activeView === 'images' && '画面预演 (生图)'}
-                    {activeView === 'video_fragments' && '分镜视频 (让画面动起来)'}
-                    {activeView === 'video_master' && '最终母带'}
-                  </h2>
-                </div>
-
-                {/* Secondary Actions Row */}
-                <div className="flex items-center gap-4">
-                  {activeView === 'images' && (
-                    <div className="flex gap-2 items-center">
-                      <select
-                        value={globalContext.image_engine === 'runninghub' ? 'nb_pro' : globalContext.image_engine || 'nb_pro'}
-                        onChange={(e) => updateGlobalContext({ image_engine: e.target.value as any })}
-                        className="bg-black/40 border border-white/10 text-gray-300 text-[10px] rounded px-3 py-2 outline-none focus:border-director-accent/50 mr-2 transition-all hover:bg-white/5 hover:text-white"
-                        title="分镜渲染模型"
-                      >
-                        <option value="nb_pro">引擎: NB Pro (电影级)</option>
-                        <option value="qwen2512">引擎: Qwen-2.5 (快速)</option>
-                      </select>
-                      <button onClick={batchRenderAllPhotos} className="px-4 py-2 bg-white/5 border border-[#D4AF37]/50 text-[#D4AF37] text-[10px] font-bold rounded hover:bg-[#D4AF37]/10 transition-all shadow-[0_0_10px_rgba(212,175,55,0.2)]">批量渲染所有图片</button>
-                      <button onClick={() => setActiveView('video_fragments')} className="px-4 py-2 bg-[#D4AF37] text-black shadow-[0_0_15px_rgba(212,175,55,0.4)] text-[10px] font-bold rounded hover:bg-[#ebd578] transition-all flex items-center gap-1">
-                        进入视频生成
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      </button>
-                    </div>
-                  )}
-
-                  {activeView === 'video_fragments' && (
-                    <div className="flex gap-2 items-center">
-                      <button onClick={batchRenderAllVideos} className="px-4 py-2 bg-white/5 border border-[#D4AF37]/50 text-[#D4AF37] text-[10px] font-bold rounded hover:bg-[#D4AF37]/10 transition-all shadow-[0_0_10px_rgba(212,175,55,0.2)]">批量图生视频</button>
-                      <button onClick={handleMasterSynthesis} className="px-4 py-2 bg-emerald-500 text-black text-[10px] font-bold rounded shadow-lg shadow-emerald-500/20">直接导出母带</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex-grow overflow-y-auto">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+              {/* Views */}
+              <div className="max-w-7xl mx-auto space-y-12 pb-32">
                 {activeView === 'context' && (
-                  <div className="flex flex-col gap-6 h-full pb-8">
-                    <div className="director-panel p-6 shrink-0 border border-gray-800 rounded-3xl bg-[#050505]">
-                      <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4">
-                        <h3 className="text-[10px] font-black tracking-widest text-gray-500 uppercase">制片风格</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[70vh]">
+                    <div className="director-panel p-6 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-director-accent animate-pulse" />
+                          <h4 className="text-xs font-black tracking-widest text-white uppercase">剧本文学 (Literary Script)</h4>
+                        </div>
+                        {selectedChapterId && (
+                          <span className="text-[10px] text-director-accent font-bold uppercase tracking-widest">编辑章节模式</span>
+                        )}
                       </div>
-                      <ContextSettings />
+                      <ScriptEditor
+                        script={(selectedChapterId && projectMetadata?.chapters?.some(c => c.id === selectedChapterId)) ? (projectMetadata?.chapters?.find(c => c.id === selectedChapterId)?.content || '') : script}
+                        onChange={(val) => {
+                          const chapterExists = selectedChapterId && projectMetadata?.chapters?.some(c => c.id === selectedChapterId);
+                          console.log('App: ScriptEditor onChange. Length:', val.length, 'ChapterMode:', !!chapterExists, 'ID:', selectedChapterId);
+                          if (!selectedChapterId || !chapterExists) {
+                            setScript(val);
+                          } else {
+                            updateChapterContent(selectedChapterId, val);
+                          }
+                        }}
+                      />
                     </div>
-                    <div className="flex-grow director-panel p-6 border border-gray-800 rounded-3xl bg-[#050505]">
-                      <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4">
-                        <h3 className="text-[10px] font-black tracking-widest text-gray-500 uppercase">剧本分析</h3>
+                    <div className="flex flex-col gap-6">
+                      <div className="director-panel p-6 shrink-0 border border-gray-800 rounded-3xl bg-[#050505]">
+                        <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4">
+                          <h3 className="text-[10px] font-black tracking-widest text-gray-500 uppercase">制片风格</h3>
+                        </div>
+                        <ContextSettings />
                       </div>
-                      <ScriptDashboard metadata={projectMetadata} context={globalContext} onNext={() => setActiveView('foundry')} />
+                      <div className="flex-grow director-panel p-6 border border-gray-800 rounded-3xl bg-[#050505] flex flex-col items-center justify-center gap-4">
+                        <div className="w-12 h-12 border-2 border-dashed border-gray-800 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        </div>
+                        <p className="text-xs text-gray-500 text-center leading-relaxed max-w-[180px]">
+                          输入剧本后点击<span className="text-director-accent font-bold">"全剧架构分析"</span>，系统将自动分集并在"分集"页中展示结果。
+                        </p>
+                        {projectMetadata?.chapters && projectMetadata.chapters.length > 0 && (
+                          <button
+                            onClick={() => setActiveView('episodes')}
+                            className="px-4 py-2 bg-director-accent/10 hover:bg-director-accent/20 border border-director-accent/30 text-director-accent rounded-lg text-[10px] font-bold tracking-widest uppercase transition-all"
+                          >
+                            查看分集 ({projectMetadata.chapters.length} 集) →
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
+                )}
+
+                {activeView === 'episodes' && (
+                  <EpisodeDashboard
+                    metadata={projectMetadata}
+                    context={globalContext}
+                    isAnalyzing={isAnalyzing}
+                    onBackToScript={() => setActiveView('context')}
+                    onGenerateChapter={(chapterId) => {
+                      setSelectedChapterId(chapterId);
+                      handleGenerateStoryboard(chapterId);
+                    }}
+                  />
                 )}
 
                 {activeView === 'storyboard' && (
@@ -241,6 +292,8 @@ const App: React.FC = () => {
                     onRenderCandidates={renderCandidates}
                     onRenderVideo={renderSingleVideo}
                     mode="text-only"
+                    onInsertShot={handleInsertShot}
+                    onDeriveShot={handleDeriveShots}
                   />
                 )}
 
@@ -262,25 +315,47 @@ const App: React.FC = () => {
                         onRenderVideo={renderSingleVideo}
                         layout={imageLayout}
                         viewMode={activeView === 'images' ? 'images_only' : 'videos_only'}
+                        onInsertShot={handleInsertShot}
+                        onDeriveShot={handleDeriveShots}
                       />
                     </div>
-                    <div className="mt-auto pt-6 border-t border-white/5 pb-2">
-                      <Timeline
-                        storyboard={storyboard}
-                        currentIndex={previzActiveIdx}
-                        onSeek={(idx) => {
-                          setPrevizActiveIdx(idx);
-                          // Scroll logic (Find card by data attribute or similar)
-                          const boardEl = scrollBoardRef.current;
-                          if (boardEl) {
-                            const cards = boardEl.querySelectorAll('[data-shot-number]');
-                            if (cards[idx]) {
-                              cards[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                          }
-                        }}
-                      />
-                    </div>
+
+                    {/* Timeline Toggle & Component */}
+                    {activeView === 'video_fragments' && (
+                      <div className="mt-auto pt-4 border-t border-white/5 relative">
+                        <div className="flex justify-between items-center mb-2 px-2">
+                          <span className="text-[10px] font-black tracking-widest text-zinc-600 uppercase">镜头序列</span>
+                          <button
+                            onClick={() => setShowTimeline(!showTimeline)}
+                            className="text-[10px] font-bold text-[#D4AF37] hover:text-white transition-colors flex items-center gap-1 bg-white/5 px-3 py-1 rounded-full border border-white/5"
+                          >
+                            {showTimeline ? '隐藏序列' : '展开序列'}
+                            <svg className={`w-3 h-3 transition-transform ${showTimeline ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {showTimeline && (
+                          <div className="pb-2 animate-in slide-in-from-bottom-4 duration-300">
+                            <Timeline
+                              storyboard={storyboard}
+                              currentIndex={previzActiveIdx}
+                              onSeek={(idx) => {
+                                setPrevizActiveIdx(idx);
+                                const boardEl = scrollBoardRef.current;
+                                if (boardEl) {
+                                  const cards = boardEl.querySelectorAll('[data-shot-number]');
+                                  if (cards[idx]) {
+                                    cards[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -331,25 +406,10 @@ const App: React.FC = () => {
         {showProjectList && (
           <ProjectList
             currentState={{
-              // Shim for ProjectList which expects legacy AppState structure if we haven't refactored it yet
-              // Ideally ProjectList should be refactored to use store too.
-              // For now, I'll assume ProjectList needs refactoring or I pass a shim.
-              // Given I didn't refactor ProjectList, it might break. 
-              // ProjectList uses `currentState` and `onLoadProject`.
-              // I will need to check ProjectList compatibility.
               project: { metadata: projectMetadata!, storyboard },
               global_context: globalContext,
-              // ... other shim props if needed
             } as any}
-
-            /* 
-               Refactoring ProjectList is safer. 
-               But for now let's just make sure it doesn't crash. 
-               If ProjectList relies on `props.currentState`, I should pass the store data.
-            */
-
             onLoadProject={(loadedState) => {
-              // Map legacy loaded state to store
               if (loadedState.project) {
                 useProjectStore.getState().setProjectMetadata(loadedState.project.metadata);
                 useProjectStore.getState().setStoryboard(loadedState.project.storyboard);

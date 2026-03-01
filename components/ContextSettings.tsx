@@ -1,6 +1,6 @@
 import React from 'react';
 import { useProjectStore } from '../store/useProjectStore';
-import { STYLE_CATEGORIES, ASPECT_RATIOS } from '../constants';
+import { STYLE_CATEGORIES, ASPECT_RATIOS, IMAGE_ENGINES, VIDEO_ENGINES } from '../constants';
 
 interface ContextSettingsProps {
     className?: string;
@@ -67,7 +67,7 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                                 </summary>
                                 <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                                     <input
-                                        type="text"
+                                        type="password"
                                         placeholder={globalContext.script_engine === 'kimi' ? "API Key" : "API Base URL (e.g. 代理地址)"}
                                         value={
                                             globalContext.script_engine === 'kimi'
@@ -99,26 +99,31 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                     <div className="space-y-3">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">渲染引擎 (出图)</label>
                         <div className="grid grid-cols-4 gap-1 p-1 bg-black/40 rounded-xl border border-white/5">
-                            {[
-                                { label: 'Gemini', value: 'google' as const },
-                                { label: 'NB pro', value: 'nb_pro' as const },
-                                { label: 'Z-image', value: 'z_image' as const },
-                                { label: 'qwen2512', value: 'qwen2512' as const }
-                            ].map(engine => (
+                            {IMAGE_ENGINES.map(engine => (
                                 <button
                                     key={engine.value}
-                                    onClick={() => updateGlobalContext({ image_engine: engine.value })}
+                                    onClick={() => updateGlobalContext({ image_engine: engine.value as any })}
                                     className={`px-2 py-2 rounded-lg transition-all text-[9.5px] font-bold uppercase ${globalContext.image_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                                    title={engine.desc}
                                 >
                                     {engine.label}
                                 </button>
                             ))}
                         </div>
-                        {(globalContext.image_engine === 'runninghub' || globalContext.image_engine === 'nb_pro' || globalContext.image_engine === 'qwen2512') && (
+                        {(globalContext.image_engine === 'runninghub' || globalContext.image_engine === 'nb2' || globalContext.image_engine === 'qwen2512') && (
                             <div className="mt-2 pl-1">
                                 <details className="cursor-pointer">
-                                    <summary className="text-[9px] text-zinc-600 hover:text-zinc-400 font-bold uppercase tracking-wider outline-none">高级配置 (RunningHub)</summary>
+                                    <summary className="text-[11px] text-zinc-600 hover:text-zinc-400 font-bold uppercase tracking-wider outline-none">
+                                        ▼ 高级配置 (RunningHub / API Key)
+                                    </summary>
                                     <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <input
+                                            type="password"
+                                            placeholder="RunningHub API Key"
+                                            value={globalContext.engine_configs?.['runninghub']?.api_key || ''}
+                                            onChange={(e) => updateEngineConfig('runninghub', 'api_key', e.target.value)}
+                                            className="w-full bg-black border border-white/5 rounded-lg px-3 py-2 text-[10px] text-zinc-400 outline-none focus:border-[#D4AF37]/30"
+                                        />
                                         <input
                                             type="text"
                                             placeholder="自定义 API Base"
@@ -130,22 +135,6 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                                 </details>
                             </div>
                         )}
-                    </div>
-
-                    {/* Video Engine */}
-                    <div className="space-y-3">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">视频生成引擎</label>
-                        <div className="grid grid-cols-1 gap-1 p-1 bg-black/40 rounded-xl border border-white/5 max-w-[50%]">
-                            {[{ label: 'Gemini', value: 'google' as const }].map(engine => (
-                                <button
-                                    key={engine.value}
-                                    onClick={() => updateGlobalContext({ video_engine: engine.value })}
-                                    className={`px-3 py-2 rounded-lg transition-all text-[10px] font-bold uppercase ${globalContext.video_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
-                                >
-                                    {engine.label}
-                                </button>
-                            ))}
-                        </div>
                     </div>
                 </div>
             </div>

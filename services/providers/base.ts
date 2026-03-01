@@ -5,12 +5,23 @@ import {
     GlobalContext,
     AspectRatio,
     ProjectMetadata,
-    EnvironmentDNA
+    EnvironmentDNA,
+    Episode,
+    ProjectStatus,
+    Chapter,
+    AIEngine
 } from "../../types";
 
 export interface ScriptProvider {
     updateConfig?(config: any): void;
-    extractAssets(script: string): Promise<{ characters: any[], scenes: any[] }>;
+    // New Hierarchy Methods (Full Script Analysis)
+    partitionIntoChapters(script: string): Promise<Chapter[]>;
+    extractGlobalAssets(script: string, context: GlobalContext): Promise<{ characters: any[], scenes: any[] }>;
+
+    extractAssets(script: string, context: GlobalContext, engine?: AIEngine): Promise<{ characters: any[], scenes: any[] }>;
+    analyzeShotInsertion(description: string, context: GlobalContext, surroundingShots: StoryboardItem[]): Promise<StoryboardItem>;
+    deriveShotsFromAnchor(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
+    structureEpisodes(script: string): Promise<{ status: ProjectStatus, episodes: Episode[] }>;
     generateStoryboard(script: string, characters: any[], scenes: any[]): Promise<{ metadata: ProjectMetadata, initial_script: any[] }>;
     forgeCharacterDNA(draft: any, context: GlobalContext): Promise<CharacterDNA>;
     forgeSceneDNA(draft: any, context: GlobalContext): Promise<SceneDNA>;

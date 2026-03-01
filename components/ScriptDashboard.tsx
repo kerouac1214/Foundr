@@ -76,7 +76,7 @@ const ScriptDashboard: React.FC<ScriptDashboardProps> = ({ metadata, context, on
                     <p className="text-xs text-gray-400 leading-relaxed italic">
                         该剧本呈现出 <span className="text-white font-bold">{metadata.overall_mood || '未知'}</span> 的叙事氛围，
                         整体能量等级为 <span className="text-white font-bold">{metadata.energy_level || '稳定'}</span>。
-                        {(metadata.transitions && metadata.transitions.length > 0) ? (
+                        {(Array.isArray(metadata.transitions) && metadata.transitions.length > 0) ? (
                             <span>系统已根据节奏特征建议在第 {metadata.transitions.join(', ')} 处进行重点转场优化。</span>
                         ) : (
                             <span>系统已完成全片节奏扫描。</span>

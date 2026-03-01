@@ -1,15 +1,16 @@
 import { AspectRatio } from "../../types";
 import { withRetry } from "../core";
 import { ImageProvider } from "./base";
-import { uploadFile, runWorkflow, pollTask, runNBProImage } from "../runningHubService";
+import { uploadFile, runWorkflow, pollTask } from "../runningHubService";
 import JSZip from "jszip";
 
 export class RunningHubProvider implements ImageProvider {
-    private workflowIdNBPro = "2004543847939751938"; // NB pro (Default)
-    private workflowIdQwen = "2007837815798763521";  // qwen2512
-    private workflowIdLegacy = "1967051468748546049"; // Legacy fusion
+    // New NB2 Workflow: AI App 2027697385668874241
+    private workflowIdNB2 = "2027697385668874241";
+    private workflowIdQwen = "2007837815798763521";
+    private workflowIdLegacy = "1967051468748546049";
     private config?: any;
-    private currentEngine: string = 'nb_pro';
+    private currentEngine: string = 'nb2';
 
     updateConfig(config: any) {
         this.config = config;
@@ -57,99 +58,73 @@ export class RunningHubProvider implements ImageProvider {
             const uploadedUrls: string[] = [];
             if (refImages && refImages.length > 0) {
                 for (const url of refImages) {
-                    const blob = await this.urlToBlob(url);
-                    const uploaded = await uploadFile(blob, `ref_${Date.now()}.png`, this.config);
-                    uploadedUrls.push(uploaded);
+                    try {
+                        const blob = await this.urlToBlob(url);
+                        const uploaded = await uploadFile(blob, `ref_${Date.now()}.png`, this.config);
+                        uploadedUrls.push(uploaded);
+                    } catch (e) {
+                        console.warn("Reference image upload failed", e);
+                    }
                 }
             }
 
-            // Path 1: Z-image or NB Pro (Via User-Provided ComfyUI Workflow)
-            if (this.currentEngine === 'nb_pro' || this.currentEngine === 'z_image' || this.currentEngine === 'runninghub') {
-                // Check if this is a specialized Character DNA Prompt by extracting JSON
+            // Path 1: NB2 / z_image / runninghub logic
+            if (this.currentEngine === 'nb2' || this.currentEngine === 'runninghub' || this.currentEngine === 'z_image') {
                 let isCharacterJSON = false;
                 let cleanJsonPrompt = prompt;
 
                 try {
-                    // Try parsing directly first
                     let parsed = JSON.parse(prompt);
                     if (parsed.Identity_Consistency_Protocol) isCharacterJSON = true;
                 } catch (e) {
-                    // If direct parse fails, try extracting via regex in case it has prefixes like "Character Portrait: "
                     const jsonMatch = prompt.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                         try {
                             const parsed = JSON.parse(jsonMatch[0]);
                             if (parsed.Identity_Consistency_Protocol) {
                                 isCharacterJSON = true;
-                                cleanJsonPrompt = jsonMatch[0]; // Use the perfectly clean JSON
+                                cleanJsonPrompt = jsonMatch[0];
                             }
                         } catch (innerE) { }
                     }
                 }
 
-                // Z-image workflow maps to 2026205650287599618, Node 59.
-                // It specifically handles Character DNA. But if user manually selected z_image for general storyboard, force run it through Node 59 anyway.
-                if (isCharacterJSON || this.currentEngine === 'z_image') {
-                    // If user forces z_image but provide non-json, we just send as is (though it might fail on server).
-                    // If we found valid JSON, we send cleanJsonPrompt to guarantee it parses.
-                    const finalPayload = isCharacterJSON ? cleanJsonPrompt : prompt;
-
-                    const WORKFLOW_ID = "2026270585814261762";
-                    const nodeInfoList: any[] = [
-                        { nodeId: "59", fieldName: "value", fieldValue: finalPayload }
-                    ];
-
-                    console.log("[Z-Image Debug] Sending payload to RunningHub:", JSON.stringify(nodeInfoList, null, 2));
-
-                    const taskId = await runWorkflow(WORKFLOW_ID, nodeInfoList, this.config);
-                    const resultUrl = await pollTask(taskId, this.config);
-                    if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
-                    return resultUrl;
-                }
-
-                const WORKFLOW_ID = "2026161270482804737";
-
-                // Base parameters mapped to Node 2
+                // Default NB2/z_image logic: Use Workflow 2027697385668874241
+                console.log(`[NB2 Debug] Using Workflow ${this.workflowIdNB2} for engine: ${this.currentEngine}`);
                 const nodeInfoList: any[] = [
-                    { nodeId: "2", fieldName: "prompt", fieldValue: prompt },
-                    { nodeId: "2", fieldName: "aspectRatio", fieldValue: aspectRatio },
-                    { nodeId: "2", fieldName: "resolution", fieldValue: "1k" },
-                    { nodeId: "2", fieldName: "channel", fieldValue: "Third-party" } // Optional cost saving
+                    { nodeId: "4", fieldName: "text", fieldValue: isCharacterJSON ? cleanJsonPrompt : prompt },
+                    { nodeId: "9", fieldName: "aspectRatio", fieldValue: aspectRatio },
+                    { nodeId: "9", fieldName: "resolution", fieldValue: "1k" }
                 ];
 
-                // Map up to 6 reference images to Nodes 11, 12, 13, 3, 7, 8
-                const imageNodeIds = ["11", "12", "13", "3", "7", "8"];
-                if (uploadedUrls.length > 0) {
-                    for (let i = 0; i < Math.min(uploadedUrls.length, 6); i++) {
-                        nodeInfoList.push({
-                            nodeId: imageNodeIds[i],
-                            fieldName: "image",
-                            fieldValue: uploadedUrls[i]
-                        });
-                    }
-                }
+                // Map Images to 1, 2, 3, 10
+                const imageNodes = ["1", "2", "3", "10"];
+                imageNodes.forEach((nodeId, index) => {
+                    const value = uploadedUrls[index] || ""; // Explicitly clear if not provided
+                    nodeInfoList.push({
+                        nodeId: nodeId,
+                        fieldName: "image",
+                        fieldValue: value
+                    });
+                });
 
-                const taskId = await runWorkflow(WORKFLOW_ID, nodeInfoList, this.config);
+                console.log("[NB2 Debug] nodeInfoList:", JSON.stringify(nodeInfoList, null, 2));
+
+                const taskId = await runWorkflow(this.workflowIdNB2, nodeInfoList, this.config);
                 const resultUrl = await pollTask(taskId, this.config);
                 if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
                 return resultUrl;
             }
 
-            // Path 2: qwen2512 (Standard Workflow API)
+            // Path 2: qwen2512
             const [w, h] = this.aspectRatioToPixels(aspectRatio);
-            const nodeInfoList: any[] = [
+            const nodeInfoList = [
                 { nodeId: "5", fieldName: "text", fieldValue: prompt },
                 { nodeId: "7", fieldName: "width", fieldValue: w.toString() },
                 { nodeId: "7", fieldName: "height", fieldValue: h.toString() }
             ];
-
-            // If single reference is provided for qwen (though it's mostly T2I), we could map it if we knew the node
-            // For now, qwen remains primarily a T2I backup as requested
-
             const taskId = await runWorkflow(this.workflowIdQwen, nodeInfoList, this.config);
-            const resultUrl = await pollTask(taskId, this.config);
-            if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
-            return resultUrl;
+            return await pollTask(taskId, this.config);
         });
     }
 }

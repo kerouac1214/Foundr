@@ -6,8 +6,8 @@ const RUNNINGHUB_API_KEY = process.env.RUNNINGHUB_API_KEY || "";
 const DEFAULT_BASE_URL = "/runninghub";
 
 export interface RunningHubConfig {
-    apiBase?: string;
-    apiKey?: string;
+    api_base?: string;
+    api_key?: string;
 }
 const VOICE_WORKFLOW_ID = "2021166495828549634"; // Voice Cloning Workflow ID
 
@@ -43,8 +43,8 @@ export const uploadFile = async (
     filename: string = `file_${Date.now()}.png`,
     config?: RunningHubConfig
 ): Promise<string> => {
-    const apiBase = config?.apiBase || DEFAULT_BASE_URL;
-    const apiKey = config?.apiKey || RUNNINGHUB_API_KEY;
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
     let blob: Blob;
     let mimeType = 'application/octet-stream';
     if (filename.endsWith('.png')) mimeType = 'image/png';
@@ -102,8 +102,8 @@ export interface NodeInfo {
 }
 
 export const runNBProImage = async (params: { prompt: string, aspectRatio?: string, resolution?: string }, config?: RunningHubConfig) => {
-    const apiBase = config?.apiBase || DEFAULT_BASE_URL;
-    const apiKey = config?.apiKey || RUNNINGHUB_API_KEY;
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
     const URL = `${apiBase}/openapi/v2/rhart-image-n-pro/text-to-image`;
 
     const body = {
@@ -132,9 +132,43 @@ export const runNBProImage = async (params: { prompt: string, aspectRatio?: stri
     return taskId;
 };
 
+export const runViduQ2Pro = async (params: { prompt: string, imageUrl: string, duration?: string, resolution?: string }, config?: RunningHubConfig) => {
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
+    const URL = `${apiBase}/openapi/v2/vidu/image-to-video-q2-pro`;
+
+    const body = {
+        prompt: params.prompt,
+        imageUrl: params.imageUrl,
+        duration: params.duration || "5",
+        resolution: params.resolution || "720p",
+        movementAmplitude: "auto",
+        bgm: false // Changed to false by default for consistency unless BGM is needed
+    };
+
+    const resp = await fetch(URL, {
+        method: 'POST',
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Vidu Q2 Pro Run Failed (${resp.status}): ${text}`);
+    }
+
+    const result = await resp.json();
+    const taskId = result.taskId || (result.data && result.data.taskId);
+    if (!taskId) throw new Error(`No Task ID in response: ${JSON.stringify(result)}`);
+    return taskId;
+};
+
 export const runWorkflow = async (workflowId: string, nodeInfoList: NodeInfo[], config?: RunningHubConfig) => {
-    const apiBase = config?.apiBase || DEFAULT_BASE_URL;
-    const apiKey = config?.apiKey || RUNNINGHUB_API_KEY;
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
 
     const endpoints = [
         `${apiBase}/openapi/v2/run/workflow/${workflowId}`,
@@ -177,8 +211,8 @@ export const runWorkflow = async (workflowId: string, nodeInfoList: NodeInfo[], 
 };
 
 export const pollTask = async (taskId: string, config?: RunningHubConfig, timeoutMs: number = 240000) => {
-    const apiBase = config?.apiBase || DEFAULT_BASE_URL;
-    const apiKey = config?.apiKey || RUNNINGHUB_API_KEY;
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
 
     // Use the v2 query endpoint provided by user
     const QUERY_URL = `${apiBase}/openapi/v2/query`;
@@ -246,3 +280,113 @@ export const cloneVoice = async (audioBase64: string, text: string, config?: Run
     // 3. Poll
     return await pollTask(taskId, config);
 };
+
+export const runSeedance15 = async (params: { prompt: string, imageUrl: string, duration?: string, resolution?: string, aspectRatio?: string }, config?: RunningHubConfig) => {
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
+    const URL = `${apiBase}/openapi/v2/seedance-v1.5-pro/image-to-video-fast`;
+
+    const body = {
+        prompt: params.prompt,
+        firstImageUrl: params.imageUrl,
+        lastImageUrl: "",
+        aspectRatio: params.aspectRatio || "adaptive",
+        duration: params.duration || "5",
+        resolution: params.resolution || "720p",
+        generateAudio: "true",
+        cameraFixed: "false"
+    };
+
+    const resp = await fetch(URL, {
+        method: 'POST',
+        headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Seedance 1.5 Run Failed (${resp.status}): ${text}`);
+    }
+
+    const result = await resp.json();
+    const taskId = result.taskId || (result.data && result.data.taskId);
+    if (!taskId) throw new Error(`No Task ID in response: ${JSON.stringify(result)}`);
+    return taskId;
+};
+
+/**
+ * Rhart Flash Text to Image API
+ */
+export async function runRhartT2I(prompt: string, aspectRatio: string, config?: any): Promise<string> {
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
+    const resp = await fetch(`${apiBase}/openapi/v2/rhart-image-n-g31-flash/text-to-image`, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            prompt,
+            aspectRatio,
+            resolution: "1k"
+        })
+    });
+
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Rhart T2I Failed: ${resp.status} - ${errText}`);
+    }
+
+    const data = await resp.json();
+    console.log(`[Rhart T2I] Response:`, JSON.stringify(data));
+
+    if (data.errorCode && data.errorCode !== "0") {
+        throw new Error(`Rhart T2I Error (${data.errorCode}): ${data.errorMessage}`);
+    }
+
+    const taskIdResult = data.taskId || (data.data && data.data.taskId);
+    if (!taskIdResult) throw new Error(`No taskId returned from Rhart T2I: ${JSON.stringify(data)}`);
+    return await pollTask(taskIdResult, config);
+}
+
+/**
+ * Rhart Flash Image to Image API
+ */
+export async function runRhartI2I(prompt: string, imageUrls: string[], aspectRatio: string, config?: any): Promise<string> {
+    const apiBase = config?.api_base || DEFAULT_BASE_URL;
+    const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
+    const resp = await fetch(`${apiBase}/openapi/v2/rhart-image-n-g31-flash/image-to-image`, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            imageUrls,
+            prompt,
+            aspectRatio,
+            resolution: "1k"
+        })
+    });
+
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Rhart I2I Failed: ${resp.status} - ${errText}`);
+    }
+
+    const data = await resp.json();
+    console.log(`[Rhart I2I] Response:`, JSON.stringify(data));
+
+    if (data.errorCode && data.errorCode !== "0") {
+        throw new Error(`Rhart I2I Error (${data.errorCode}): ${data.errorMessage}`);
+    }
+
+    const taskIdResult = data.taskId || (data.data && data.data.taskId);
+    if (!taskIdResult) throw new Error(`No taskId returned from Rhart I2I: ${JSON.stringify(data)}`);
+    return await pollTask(taskIdResult, config);
+}
+

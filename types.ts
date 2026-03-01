@@ -22,23 +22,29 @@ export interface CharacterDNA {
   voice_ref_audio_url?: string; // Base64 or URL of uploaded reference audio
   voice_sample_text?: string;   // Text to speak
   voice_preview_url?: string;   // URL of generated voice
-  /** 用于一致性参考的图片 URL */
+  /** 用于一致性参考的图片 URL (确认过的形象) */
   reference_image_url?: string;
   /** 是否锁定此角色的视觉参考 */
   is_reference_locked?: boolean;
+  /** 候选参考图库 (用于生成引导) */
+  candidate_reference_images?: string[];
 }
 
 export interface SceneDNA {
-  scene_id: string;
+  scene_id: string; // This corresponds to Asset_ID (e.g. INT_...)
   name: string;
-  description: string;
+  description: string; // Space and Atmosphere
+  narrative_importance: 'Hero' | 'Transition';
+  relevant_scene_ids: string[]; // List of S01, S02... that use this asset
   visual_anchor_prompt: string;
   core_lighting: string;
   key_elements: string[];
   preview_url?: string;
   seed: number;
-  /** 场景参考图 */
+  /** 场景参考图 (确认过的场景形象) */
   reference_image_url?: string;
+  /** 候选场景参考图库 */
+  candidate_reference_images?: string[];
 }
 
 export interface EnvironmentDNA {
@@ -49,8 +55,18 @@ export interface EnvironmentDNA {
   preview_url?: string;
 }
 
+export type LifecycleStatus = 'draft' | 'analyzing' | 'structured' | 'production' | 'completed';
+export type AnalysisMode = 'Single_Episode' | 'Full_Script';
+
+export interface Chapter {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  episode_ids: number[]; // References to Episode IDs within this chapter
+}
 export type AspectRatio = '16:9' | '9:16' | '4:3' | '1:1';
-export type AIEngine = 'google' | 'runninghub' | 'modelscope' | 'kimi' | 'nb_pro' | 'qwen2512' | 'z_image';
+export type AIEngine = 'google' | 'runninghub' | 'modelscope' | 'kimi' | 'nb2' | 'nb_pro' | 'qwen2512' | 'z_image' | 'wan2_2' | 'vidu_q2' | 'seedance_1_5';
 export type ImageEngine = AIEngine;
 
 export interface GlobalContext {
@@ -66,6 +82,7 @@ export interface GlobalContext {
   /** 引擎配置，如自定义 API 地址等 */
   engine_configs?: Record<string, {
     api_base?: string;
+    api_key?: string;
     model_name?: string;
     api_key_override?: string;
   }>;
@@ -86,11 +103,37 @@ export interface BatchProgress {
   message?: string;
 }
 
+export interface Episode {
+  episode_number: number;
+  estimated_duration: string;
+  boundaries: {
+    start_text_anchor: string;
+    end_text_anchor: string;
+  };
+  narrative_structure: {
+    opening_scene: string;
+    core_conflict: string;
+    ending_cliffhanger: string;
+  };
+}
+
+export interface ProjectStatus {
+  total_episodes: number;
+  division_mode: 'Original_Script_Markers' | 'Smart_120s_Cliffhanger';
+}
+
 export interface ProjectMetadata {
   id: string;
+  name?: string;
+  full_script?: string;
+  analysis_mode?: AnalysisMode;
   bpm: number;
   energy_level: string;
   overall_mood: string;
+  lifecycle_status?: LifecycleStatus;
+  status?: ProjectStatus; // Episodic status
+  chapters?: Chapter[];
+  episodes?: Episode[];
   transitions: number[];
 }
 
@@ -99,31 +142,31 @@ export interface StoryboardItem {
   shot_number: number;
   timestamp: string;
   duration: number;
-  shot_type: 'CU' | 'MS' | 'LS' | 'POV';
-  action_description: string;
-  visual_content: string;
+  shot_type: string; // Made string for more cinematic labels like WS
+  camera_angle?: string;
   camera_movement: string;
-  audio_cue: string;
+  lens_and_aperture?: string; // New: 85mm f/1.4
+  lighting_vibe?: string;
+  action_description: string;
+  visual_content?: string;
+  sound_design?: string; // New: Audio & Ambience
   lyric_line: string;
   seed: number;
   character_ids: string[];
   scene_id?: string;
+  ai_prompts?: {
+    image_generation_prompt: string;
+    video_generation_prompt: string;
+  };
   preview_url?: string;
   video_url?: string;
+  video_engine?: AIEngine;
   video_status?: 'idle' | 'generating' | 'ready';
-  /** 是否锁定，锁定后批量操作会跳过此镜头 */
   isLocked?: boolean;
-  /** 图片渲染状态 */
   render_status?: 'idle' | 'rendering' | 'done';
-  /** 生成图片的实际提示词 */
   image_prompt?: string;
-  /** 扩展元数据：运镜、灯光等 */
-  camera_angle?: string;
-  lighting_vibe?: string;
   composition?: string;
-  /** 最终渲染参考图 (一旦生成满意的图可锁定为参考) */
   reference_image_url?: string;
-  /** 候选图片 (First-Frame Selection) */
   candidate_image_urls?: string[];
 }
 

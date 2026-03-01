@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { StoryboardItem, GlobalContext } from '../types';
+import { VIDEO_ENGINES } from '../constants';
 
 interface StoryboardCardProps {
   item: StoryboardItem;
@@ -9,8 +10,11 @@ interface StoryboardCardProps {
   onRenderPhoto: () => Promise<void>;
   onRenderVideo: () => Promise<void>;
   mode?: 'text-only' | 'visual';
+  layout?: 'list' | 'grid';
   viewMode?: 'images_only' | 'videos_only';
   onImageClick?: () => void;
+  onRenderCandidates: () => Promise<void>;
+  onDerive?: () => void;
 }
 
 const SHOT_TYPES = [
@@ -29,7 +33,7 @@ const CAMERA_MOVEMENTS = [
   { value: 'Orbit', label: '环绕' },
 ] as const;
 
-const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate, onRenderPhoto, onRenderVideo, mode = 'visual', viewMode, onImageClick }) => {
+const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate, onRenderPhoto, onRenderCandidates, onRenderVideo, onDerive, mode = 'visual', layout = 'list', viewMode, onImageClick }) => {
   const aspectRatioClass = context.aspect_ratio === '16:9' ? 'aspect-video' :
     context.aspect_ratio === '9:16' ? 'aspect-[9/16]' : 'aspect-[4/3]';
 
@@ -58,7 +62,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
           className={`relative ${aspectRatioClass} bg-zinc-900 overflow-hidden cursor-zoom-in`}
         >
           {item.preview_url ? (
-            <img src={item.preview_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[4000ms] ease-out" alt={`Shot ${item.shot_number}`} />
+            <img src={item.preview_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[4000ms] ease-out" alt={`镜头 ${item.shot_number}`} />
           ) : (
             <div className="w-full h-full flex items-center justify-center flex-col gap-3">
               <div className="w-14 h-14 bg-white/5 rounded-full flex items-center justify-center border border-white/20">
@@ -82,6 +86,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             className="absolute top-4 left-4 z-20 flex flex-col gap-2"
           >
             <select
+              title="镜头类型"
               value={item.shot_type}
               onChange={(e) => onUpdate({ ...item, shot_type: e.target.value as any })}
               className="px-4 py-1.5 bg-black/80 hover:bg-black rounded-full text-[10px] font-bold uppercase tracking-widest border border-[#D4AF37]/40 text-[#D4AF37] backdrop-blur-xl outline-none cursor-pointer transition-all"
@@ -92,6 +97,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             </select>
 
             <select
+              title="所属场景"
               value={item.scene_id || ''}
               onChange={(e) => onUpdate({ ...item, scene_id: e.target.value })}
               className="px-4 py-1.5 bg-black/80 hover:bg-black rounded-full text-[10px] font-bold uppercase tracking-widest border border-[#D4AF37]/40 text-zinc-300 backdrop-blur-xl outline-none cursor-pointer transition-all max-w-[120px] truncate"
@@ -106,6 +112,19 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
           <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
             {item.render_status === 'rendering' && <div className="w-5 h-5 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />}
             {item.isLocked && <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center"><svg className="w-3.5 h-3.5 text-black" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg></div>}
+
+            {/* Inference from Seed Button - Only shown when FINISHED (preview_url exists) */}
+            {item.preview_url && onDerive && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDerive(); }}
+                className="px-3 py-1 bg-[#D4AF37] hover:bg-white text-black rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg transition-all border border-[#D4AF37] active:scale-90 flex items-center gap-1.5"
+                title="以该镜头为基准推导前后关联镜头"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                推导关联
+              </button>
+            )}
+
             <div className="px-3 py-1 bg-black/60 rounded-full text-[9px] font-black tracking-tighter border border-white/10 backdrop-blur-sm text-white/50">#{item.shot_number}</div>
           </div>
         </div>
@@ -118,6 +137,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             <div className="px-3 py-1 bg-white/5 rounded-full text-[11px] font-black tracking-tighter border border-white/10 text-white/50">#{item.shot_number}</div>
 
             <select
+              title="镜头类型"
               value={item.shot_type}
               onChange={(e) => onUpdate({ ...item, shot_type: e.target.value as any })}
               className="px-4 py-1.5 bg-white/5 hover:bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10 text-zinc-300 outline-none cursor-pointer transition-all"
@@ -128,6 +148,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             </select>
 
             <select
+              title="运镜方式"
               value={item.camera_movement || 'Fixed'}
               onChange={(e) => onUpdate({ ...item, camera_movement: e.target.value })}
               className="px-4 py-1.5 bg-white/5 hover:bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10 text-zinc-300 outline-none cursor-pointer transition-all"
@@ -138,6 +159,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
             </select>
 
             <select
+              title="所属场景"
               value={item.scene_id || ''}
               onChange={(e) => onUpdate({ ...item, scene_id: e.target.value })}
               className="px-4 py-1.5 bg-white/5 hover:bg-white/10 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10 text-zinc-300 outline-none cursor-pointer transition-all max-w-[150px] truncate"
@@ -191,7 +213,7 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
           <div className="flex items-center gap-2">
             <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest shrink-0">所属场景</span>
             <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-white/5 border border-white/10 text-zinc-300 truncate">
-              {context.scenes.find(s => s.scene_id === item.scene_id)?.name || '未指定 / 自动'}
+              {context.scenes.find(s => s.scene_id === item.scene_id || s.name === item.scene_id)?.name || item.scene_id || '未指定 / 自动'}
             </span>
           </div>
         </div>
@@ -206,52 +228,71 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
           </button>
           <div className="flex-grow" />
 
-          {/* In visual mode, we have render buttons. In text-only, maybe we don't need them? Or maybe we keep them for pre-rendering? */}
-          {/* User only asked for text-only *view* in Step 2. Step 4 has images. Rendering makes sense in Step 4. */}
-          {/* But if user wants to render individual shots early? Let's keep them but maybe they are less emphasized or hidden if purely text planning. */}
-          {/* For now, I will HIDE render buttons in text-only mode to keep it clean as requested "pure text". */}
-
-          {mode === 'visual' && (
-            <>
-              {(!viewMode || viewMode === 'images_only') && (
-                <button
-                  onClick={onRenderPhoto}
-                  className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white text-zinc-200 hover:text-black rounded-xl transition-all border border-white/10"
-                  title="生成预览图"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                </button>
-              )}
-
-              {(!viewMode || viewMode === 'videos_only') && (
-                <>
+          {/* Unified Actions Bar */}
+          <div className="flex items-center gap-2">
+            {mode === 'visual' && (
+              <>
+                {(!viewMode || viewMode === 'images_only') && (
                   <button
-                    disabled={item.video_status === 'generating'}
-                    onClick={onRenderVideo}
-                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border ${item.video_status === 'generating' ? 'bg-[#D4AF37]/20 border-[#D4AF37]/40 animate-pulse' : 'bg-[#D4AF37]/10 hover:bg-[#D4AF37] border-[#D4AF37]/20 text-[#D4AF37] hover:text-black'}`}
-                    title="生成视频片段"
+                    onClick={onRenderPhoto}
+                    className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white text-zinc-200 hover:text-black rounded-xl transition-all border border-white/10"
+                    title="生成预览图"
                   >
-                    {item.video_status === 'generating' ? (
-                      <div className="w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    )}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
                   </button>
+                )}
 
-                  {item.video_url && (
-                    <a
-                      href={item.video_url}
-                      download={`shot_${item.shot_number}.mp4`}
-                      className="w-10 h-10 flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500 border-emerald-500/20 text-emerald-500 hover:text-black rounded-xl transition-all border"
-                      title="下载视频"
+                {(!viewMode || viewMode === 'videos_only') && (
+                  <>
+                    {/* Per-card Video Engine Selector */}
+                    <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5 h-10">
+                      <button
+                        onClick={() => onUpdate({ video_engine: undefined })}
+                        className={`px-2 h-full rounded-lg transition-all text-[9px] font-bold uppercase ${!item.video_engine ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        title="默认引擎"
+                      >
+                        默认
+                      </button>
+                      {VIDEO_ENGINES.map(engine => (
+                        <button
+                          key={engine.value}
+                          onClick={() => onUpdate({ video_engine: engine.value as any })}
+                          className={`px-2 h-full rounded-lg transition-all text-[9px] font-bold uppercase ${item.video_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                          title={engine.desc}
+                        >
+                          {engine.label.slice(0, 5)}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      disabled={item.video_status === 'generating'}
+                      onClick={onRenderVideo}
+                      className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border ${item.video_status === 'generating' ? 'bg-[#D4AF37]/20 border-[#D4AF37]/40 animate-pulse' : 'bg-[#D4AF37]/10 hover:bg-[#D4AF37] border-[#D4AF37]/20 text-[#D4AF37] hover:text-black'}`}
+                      title="生成视频片段"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    </a>
-                  )}
-                </>
-              )}
-            </>
-          )}
+                      {item.video_status === 'generating' ? (
+                        <div className="w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      )}
+                    </button>
+
+                    {item.video_url && (
+                      <a
+                        href={item.video_url}
+                        download={`shot_${item.shot_number}.mp4`}
+                        className="w-10 h-10 flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500 border-emerald-500/20 text-emerald-500 hover:text-black rounded-xl transition-all border"
+                        title="下载视频"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                      </a>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

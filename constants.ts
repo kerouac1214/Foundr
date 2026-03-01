@@ -1,4 +1,4 @@
-import { AspectRatio, ImageEngine } from './types';
+import { AspectRatio, ImageEngine, AIEngine } from './types';
 
 export const STYLE_CATEGORIES = [
     {
@@ -36,6 +36,12 @@ export const IMAGE_ENGINES: { label: string; value: ImageEngine; desc: string }[
     { label: 'Gemini 引擎', value: 'google', desc: '极致光影精度' },
     { label: 'RunningHub 引擎', value: 'runninghub', desc: '专业级角色一致性' },
     { label: 'Z-image', value: 'z_image', desc: '资产专属模型' }
+];
+
+export const VIDEO_ENGINES: { label: string; value: AIEngine; desc: string }[] = [
+    { label: 'Wan 2.2 (跑站)', value: 'wan2_2', desc: '工作流图生视频' },
+    { label: 'Vidu Q2 Pro', value: 'vidu_q2', desc: 'Vidu 原生 API' },
+    { label: 'See Dance 1.5', value: 'seedance_1_5', desc: '原生 API' }
 ];
 
 export const EXAMPLE_SCRIPTS = [

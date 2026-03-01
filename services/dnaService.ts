@@ -1,6 +1,5 @@
-import { Type } from "@google/genai";
-import { SceneDNA, GlobalContext, EnvironmentDNA, CharacterDNA, AIEngine } from "../types";
-import { withRetry, getAIClient } from "./core";
+import { SceneDNA, GlobalContext, EnvironmentDNA, CharacterDNA, AIEngine, StoryboardItem } from "../types";
+import { withRetry } from "./core";
 
 import { getScriptProvider } from "./providers";
 
@@ -18,4 +17,14 @@ export const forgeEnvironmentDNA = async (storyText: string, context: GlobalCont
 export const forgeCharacterDNA = async (draft: any, context: GlobalContext): Promise<CharacterDNA> => {
     const provider = getScriptProvider(context.script_engine);
     return await provider.forgeCharacterDNA(draft, context);
+};
+
+export const analyzeShotInsertion = async (description: string, context: GlobalContext, surroundingShots: StoryboardItem[]): Promise<StoryboardItem> => {
+    const provider = getScriptProvider(context.script_engine);
+    return await provider.analyzeShotInsertion(description, context, surroundingShots);
+};
+
+export const deriveShotsFromAnchor = async (anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> => {
+    const provider = getScriptProvider(context.script_engine);
+    return await provider.deriveShotsFromAnchor(anchorShot, script, context);
 };

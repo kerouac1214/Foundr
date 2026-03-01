@@ -4,6 +4,7 @@ import { cloneVoice } from '../services/runningHubService';
 import { CharacterDNA, SceneDNA } from '../types';
 import { exportProjectToZip } from '../services/exportService';
 import { useUIStore } from '../store/useUIStore';
+import { IMAGE_ENGINES } from '../constants';
 
 interface AssetManagerProps {
     className?: string;
@@ -107,10 +108,13 @@ const DetailModal: React.FC<{
     isRendering: boolean;
     // Voice specific
     onUploadAudio?: (e: React.ChangeEvent<HTMLInputElement>, id: string) => void;
+    onUploadReference?: (e: React.ChangeEvent<HTMLInputElement>, id: string) => void;
+    onSetAsReference?: (id: string, url: string) => void;
+    onRemoveReference?: (id: string, url: string) => void;
     onCloneVoice?: (id: string, audioUrl: string, text: string) => void;
     isCloning?: boolean;
     stylePreset: string;
-}> = ({ asset, type, onClose, onUpdate, onRegenerate, isRendering, onUploadAudio, onCloneVoice, isCloning, stylePreset }) => {
+}> = ({ asset, type, onClose, onUpdate, onRegenerate, isRendering, onUploadAudio, onUploadReference, onSetAsReference, onRemoveReference, onCloneVoice, isCloning, stylePreset }) => {
     // Prevent body scroll when modal is open
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -184,6 +188,99 @@ const DetailModal: React.FC<{
                             onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
                             className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-40 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
                         />
+                    </div>
+
+                    {/* Reference Images Gallery */}
+                    <div className="pt-8 border-t border-white/5 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">参考图库 / 形象确认</span>
+                            <label className="cursor-pointer bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-[#D4AF37] hover:text-black transition-all">
+                                <span>上传参考图</span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
+                                />
+                            </label>
+                        </div>
+
+                        {/* Confirmed / Active Reference */}
+                        <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl flex items-center gap-4">
+                            <label className="w-16 h-16 rounded-xl bg-zinc-900 border border-white/5 overflow-hidden flex-shrink-0 cursor-pointer hover:border-[#D4AF37]/50 transition-colors group relative">
+                                {asset.reference_image_url ? (
+                                    <img src={getProxiedUrl(asset.reference_image_url)} className="w-full h-full object-cover" alt="confirmed" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-[20px] transition-transform group-hover:scale-110">📸</div>
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-opacity">更换</div>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, reader.result as string);
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                />
+                            </label>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-[10px] font-black text-white uppercase mb-1">已确认的视觉锚点</h4>
+                                <p className="text-[9px] text-zinc-500 truncate">{asset.reference_image_url ? '生成时将以此图为核心参考' : '尚未锁定形象，点击图标上传或从库中选择'}</p>
+                            </div>
+                            {asset.reference_image_url && (
+                                <button
+                                    onClick={() => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { reference_image_url: undefined })}
+                                    className="p-2 text-zinc-600 hover:text-red-400 transition-colors"
+                                    title="清除确认形象"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Gallery Grid */}
+                        <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                            {(asset.candidate_reference_images || []).map((imgUrl: string, idx: number) => (
+                                <div key={idx} className="group relative aspect-square rounded-xl bg-zinc-900 border border-white/5 overflow-hidden">
+                                    <img src={getProxiedUrl(imgUrl)} className="w-full h-full object-cover" alt={`ref-${idx}`} />
+                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1">
+                                        <button
+                                            onClick={() => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
+                                            className="p-1.5 bg-[#D4AF37] text-black rounded-lg hover:scale-110 transition-transform"
+                                            title="设为确认形象"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        </button>
+                                        <button
+                                            onClick={() => onRemoveReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
+                                            className="p-1.5 bg-red-500/80 text-white rounded-lg hover:scale-110 transition-transform"
+                                            title="删除"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
+                                    {imgUrl === asset.reference_image_url && (
+                                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37] shadow-[0_0_5px_#D4AF37]" />
+                                    )}
+                                </div>
+                            ))}
+                            <label className="aspect-square rounded-xl border border-dashed border-zinc-800 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors group">
+                                <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                <span className="text-[8px] text-zinc-700 group-hover:text-zinc-500 uppercase font-black">添加</span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
+                                />
+                            </label>
+                        </div>
                     </div>
 
                     {/* Advanced Prompt Editor */}
@@ -304,6 +401,58 @@ const AssetManager: React.FC<AssetManagerProps> = ({
         reader.readAsDataURL(file);
     };
 
+    const handleUploadReference = async (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const uploadPromises = files.map(file => {
+            return new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(file);
+            });
+        });
+
+        const results = await Promise.all(uploadPromises);
+        const type = globalContext.characters.find(c => c.char_id === id) ? 'character' : 'scene';
+
+        if (type === 'character') {
+            const char = globalContext.characters.find(c => c.char_id === id);
+            const currentImages = char?.candidate_reference_images || [];
+            updateCharacter(id, { candidate_reference_images: [...currentImages, ...results] });
+        } else {
+            const scene = globalContext.scenes.find(s => s.scene_id === id);
+            const currentImages = scene?.candidate_reference_images || [];
+            updateScene(id, { candidate_reference_images: [...currentImages, ...results] });
+        }
+    };
+
+    const handleSetAsReference = (id: string, url: string) => {
+        const type = globalContext.characters.find(c => c.char_id === id) ? 'character' : 'scene';
+        if (type === 'character') {
+            updateCharacter(id, { reference_image_url: url });
+        } else {
+            updateScene(id, { reference_image_url: url });
+        }
+    };
+
+    const handleRemoveReference = (id: string, url: string) => {
+        const type = globalContext.characters.find(c => c.char_id === id) ? 'character' : 'scene';
+        if (type === 'character') {
+            const char = globalContext.characters.find(c => c.char_id === id);
+            const remaining = (char?.candidate_reference_images || []).filter(img => img !== url);
+            const updates: any = { candidate_reference_images: remaining };
+            if (char?.reference_image_url === url) updates.reference_image_url = undefined;
+            updateCharacter(id, updates);
+        } else {
+            const scene = globalContext.scenes.find(s => s.scene_id === id);
+            const remaining = (scene?.candidate_reference_images || []).filter(img => img !== url);
+            const updates: any = { candidate_reference_images: remaining };
+            if (scene?.reference_image_url === url) updates.reference_image_url = undefined;
+            updateScene(id, updates);
+        }
+    };
+
     const handleCloneVoice = async (charId: string, audioUrl: string, text: string) => {
         setCloningId(charId);
         try {
@@ -343,12 +492,12 @@ const AssetManager: React.FC<AssetManagerProps> = ({
                             <span className="text-[8px] font-black uppercase text-zinc-500 mb-0.5">引擎</span>
                             <span className="text-[9px] font-bold text-[#D4AF37]">{globalContext.image_engine.toUpperCase()}</span>
                         </div>
-                        <div className="flex gap-1">
-                            {[{ label: 'Gemini', value: 'google' as const }, { label: 'RunningHub', value: 'runninghub' as const }].map(engine => (
+                        <div className="flex gap-1 overflow-x-auto max-w-[200px] no-scrollbar">
+                            {IMAGE_ENGINES.map(engine => (
                                 <button
                                     key={engine.value}
-                                    onClick={() => updateGlobalContext({ image_engine: engine.value })}
-                                    className={`px-4 py-1.5 rounded-xl transition-all text-[10px] font-black uppercase ${globalContext.image_engine === engine.value ? 'bg-[#D4AF37] text-black' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
+                                    onClick={() => updateGlobalContext({ image_engine: engine.value as any })}
+                                    className={`px-3 py-1.5 rounded-xl transition-all text-[9px] font-black uppercase whitespace-nowrap ${globalContext.image_engine === engine.value ? 'bg-[#D4AF37] text-black' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
                                 >
                                     {engine.label}
                                 </button>
@@ -417,6 +566,9 @@ const AssetManager: React.FC<AssetManagerProps> = ({
                     onRegenerate={(id, prompt) => handleReRender(id, prompt, selectedAsset.type)}
                     isRendering={renderingId === selectedAsset.id}
                     onUploadAudio={handleFileUpload}
+                    onUploadReference={handleUploadReference}
+                    onSetAsReference={handleSetAsReference}
+                    onRemoveReference={handleRemoveReference}
                     onCloneVoice={handleCloneVoice}
                     isCloning={cloningId === selectedAsset.id}
                     stylePreset={globalContext.visual_style_preset}

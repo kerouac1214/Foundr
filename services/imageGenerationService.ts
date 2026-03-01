@@ -24,16 +24,31 @@ const urlToBlob = async (url: string): Promise<Blob> => {
 };
 
 
+/**
+ * Global Style Constitution (全局风格宪法)
+ * Enforces the global visual style preset as the highest priority marker for all prompts.
+ */
+export const applyStyleConstitution = (prompt: string, context: GlobalContext): string => {
+    const stylePreset = context.visual_style_preset || "cinematic lighting, high quality";
+
+    // The "Constitution" wrapper: Triple parentheses give maximum weight in most SD/ComfyUI workflows.
+    // Placing it first ensures it's the primary semantic anchor.
+    const styledPrompt = `(((Visual Style Constitution: ${stylePreset}))), ${prompt}, masterpiece, extremely detailed, cinematic, 8k resolution.`;
+
+    return styledPrompt;
+};
+
 export const refineShotPrompt = (item: StoryboardItem, characters: CharacterDNA[], inputEnv: EnvironmentDNA | undefined, scene: SceneDNA | undefined, context: GlobalContext): string => {
     const charDetails = characters.map(c =>
         `(Character: ${c.name}, VisualDNA: ${c.consistency_seed_prompt})`
     ).join(' AND ');
 
-    const visualAnchor = scene?.visual_anchor_prompt || inputEnv?.visual_anchor_prompt || context.visual_style_preset;
-    const lighting = scene?.core_lighting || inputEnv?.core_lighting || "cinematic lighting";
+    const visualAnchor = scene?.visual_anchor_prompt || inputEnv?.visual_anchor_prompt || "";
+    const lighting = scene?.core_lighting || inputEnv?.core_lighting || "";
 
-    const sceneAnchor = `((Scene Visual Anchor: ${visualAnchor}, Lighting: ${lighting}, Atmosphere: ${context.visual_style_preset}))`;
-    return `${sceneAnchor}, ${charDetails}, ACTION: ${item.action_description}, SHOT: ${item.shot_type} shot, CAMERA: ${item.camera_movement}, masterpiece.`;
+    const coreContent = `${visualAnchor ? visualAnchor + ', ' : ''}${lighting ? lighting + ', ' : ''}${charDetails}, ACTION: ${item.action_description}, SHOT: ${item.shot_type} shot, CAMERA: ${item.camera_movement}`;
+
+    return applyStyleConstitution(coreContent, context);
 };
 
 import { getImageProvider } from "./providers";

@@ -2,19 +2,21 @@ import { useRef } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import { useUIStore } from '../store/useUIStore';
 import {
-    extractAssets,
-    generateStoryboard,
     forgeSceneDNA,
     forgeEnvironmentDNA,
     forgeCharacterDNA,
     refineShotPrompt,
+    applyStyleConstitution,
     generateImagePrompt,
     generateVisualPreview,
-    generateVideoForShot
+    generateVideoForShot,
+    analyzeShotInsertion,
+    deriveShotsFromAnchor
 } from '../services/geminiService';
+import { extractAssets, generateStoryboard, structureEpisodes, partitionIntoChapters, extractGlobalAssets } from '../services/scriptAnalysisService';
 import { videoSynthesisService } from '../services/videoSynthesisService';
 import { AssetDBService } from '../services/dbService';
-import { StoryboardItem } from '../types';
+import { StoryboardItem, Episode, ProjectStatus, ProjectMetadata, Chapter, AnalysisMode } from '../types';
 
 export const useAppWorkflow = () => {
     // Store Access
@@ -28,8 +30,12 @@ export const useAppWorkflow = () => {
         updateCharacter,
         updateScene,
         updateEnvironment,
+        insertShotAt,
+        insertShotsBatch,
         storyboard,
-        projectMetadata
+        projectMetadata,
+        setSelectedChapterId,
+        setScript
     } = useProjectStore();
 
     const {
@@ -56,66 +62,207 @@ export const useAppWorkflow = () => {
     };
 
     // ========== Step 1: Analyze Script & Generate Storyboard ==========
-    const handleGenerateStoryboard = async () => {
-        if (!script) {
-            showToast('请先输入剧本内容', 'error');
+    const handleEpisodicStructuring = async (targetScript: string): Promise<{ status: ProjectStatus, episodes: Episode[] } | null> => {
+        try {
+            setError(null);
+            setStatusMessage('编剧分析：正在进行剧集统筹与智能分集...');
+            setProgress(10);
+
+            const result = await structureEpisodes(targetScript, globalContext.script_engine);
+
+            setStatusMessage(`分析完成：共切分为 ${result.status.total_episodes} 集 (${result.status.division_mode === 'Original_Script_Markers' ? '遵循原著' : '智能悬念切分'})`);
+            setProgress(100);
+
+            return result;
+        } catch (err: any) {
+            setError(err.message || '剧集统筹失败');
+            return null;
+        }
+    };
+
+    const handleGenerateStoryboard = async (chapterId?: string) => {
+        const targetScript = chapterId
+            ? projectMetadata?.chapters?.find(c => c.id === chapterId)?.content
+            : script;
+
+        if (!targetScript) {
+            showToast('未检测到剧本内容，请重试或检查输入', 'error');
             return;
         }
 
-        setIsAnalyzing(true);
-        setStatusMessage('正在分析剧本 (提取角色与场景)...');
-        setProgress(10);
+        try {
+            setIsAnalyzing(true);
+            setError(null);
+
+            // Step 1: Episodic Structuring (Existing logic)
+            console.log('[Storyboard] Step 1: Episodic structuring...');
+            const episodicData = await handleEpisodicStructuring(targetScript);
+
+            if (!episodicData) {
+                setIsAnalyzing(false);
+                showToast('剧集统筹分析失败，请检查剧本内容后重试', 'error');
+                return;
+            }
+            console.log('[Storyboard] Step 1 OK:', episodicData.status);
+
+            // Step 2: Extract Assets (Use Global if available, else local)
+            let characters = globalContext.characters;
+            let scenes = globalContext.scenes;
+
+            if (characters.length === 0 || scenes.length === 0) {
+                console.log('[Storyboard] Step 2: Extracting local assets...');
+                setStatusMessage('正在提取分集资产...');
+                const localAssets = await extractAssets(script, globalContext, globalContext.script_engine);
+                characters = localAssets.characters;
+                scenes = localAssets.scenes;
+                console.log(`[Storyboard] Step 2 OK: ${characters.length} chars, ${scenes.length} scenes`);
+            } else {
+                console.log(`[Storyboard] Step 2: Using global assets (${characters.length} chars, ${scenes.length} scenes)`);
+                setStatusMessage('正在加载全局资产一致性锚点...');
+            }
+
+            // Step 3: Generate Storyboard
+            setStatusMessage('导演视角：正在规划分镜脚本与制片参数...');
+            setProgress(60);
+
+            // Add Chapter context if available
+            let enrichedScript = targetScript;
+            const chapter = projectMetadata?.chapters?.find(c => c.id === chapterId);
+            if (chapter) {
+                enrichedScript = `[CHAPTER CONTEXT: ${chapter.title}]\nSummary: ${chapter.summary}\n\nScript:\n${targetScript}`;
+            }
+
+            console.log('[Storyboard] Step 3: Generating storyboard...');
+            const { metadata, initial_script } = await generateStoryboard(enrichedScript, characters, scenes, globalContext.script_engine);
+            console.log(`[Storyboard] Step 3 OK: ${initial_script.length} shots returned`);
+
+            if (!initial_script || initial_script.length === 0) {
+                showToast('AI 未能生成分镜脚本，可能是剧本太短或格式不符。请检查剧本后重试。', 'error');
+                setIsAnalyzing(false);
+                return;
+            }
+
+            // Merge Episodic Data into Metadata
+            // CRITICAL: Spread existing projectMetadata first to preserve chapters, full_script, name, etc.
+            // Then let the AI-returned metadata only override bpm/energy/mood/transitions.
+            const finalMetadata: ProjectMetadata = {
+                ...projectMetadata,   // Preserve chapters, full_script, analysis_mode, name, etc.
+                ...metadata,          // Let AI-returned fields (bpm, energy_level, overall_mood, transitions) override
+                id: projectMetadata?.id || crypto.randomUUID(),
+                analysis_mode: projectMetadata?.analysis_mode || 'Single_Episode',
+                status: episodicData.status,
+                episodes: episodicData.episodes,
+                // Always restore chapters from existing metadata since AI doesn't return them
+                chapters: projectMetadata?.chapters,
+            };
+
+            setProjectMetadata(finalMetadata);
+            setStoryboard(initial_script.map((item: any, idx: number) => {
+                // Failsafe: If scene_id is a name instead of ID, try to find the ID
+                let resolvedSceneId = item.scene_id;
+                if (resolvedSceneId && !scenes.some(s => s.scene_id === resolvedSceneId)) {
+                    const match = scenes.find(s => s.name === resolvedSceneId || s.name?.includes(resolvedSceneId));
+                    if (match) resolvedSceneId = match.scene_id;
+                }
+
+                return {
+                    ...item,
+                    id: crypto.randomUUID(),
+                    shot_number: idx + 1,
+                    scene_id: resolvedSceneId,
+                    timestamp: '00:00:00',
+                    duration: 3,
+                    video_status: 'idle',
+                    render_status: 'idle',
+                    seed: Math.floor(Math.random() * 1000000)
+                };
+            }));
+
+            // Only update global context if it was empty (local extraction)
+            if (globalContext.characters.length === 0) {
+                updateGlobalContext({
+                    characters: characters.map((c: any) => ({
+                        ...c,
+                        is_anchored: false,
+                        physical_core: c.physical_core || { gender_age: '', facial_features: '', hair_style: '', distinguishing_marks: '' },
+                        costume_id: c.costume_id || { top: '', bottom: '', accessories: '' },
+                        // PRESERVE extraction prompts — do NOT clear them!
+                        consistency_seed_prompt: c.consistency_seed_prompt || '',
+                        seed: c.seed || Math.floor(Math.random() * 1000000)
+                    })),
+                    scenes: scenes.map((s: any) => ({
+                        ...s,
+                        // PRESERVE extraction prompts — do NOT clear them!
+                        visual_anchor_prompt: s.visual_anchor_prompt || '',
+                        seed: s.seed || Math.floor(Math.random() * 1000000)
+                    }))
+                });
+            }
+
+            setStatusMessage('准备就绪');
+            setProgress(100);
+            setActiveView('storyboard');
+            showToast('分镜脚本与剧集架构已生成', 'success');
+        } catch (err: any) {
+            console.error('[Storyboard] FAILED:', err);
+            setError(err.message || '分镜生成失败，请检查 AI 引擎配置或重试');
+            showToast(`分镜生成失败: ${err.message || '未知错误'}`, 'error');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleFullScriptAnalysis = async () => {
+        // CRITICAL: Always read the freshest script directly from the store,
+        // not from the hook's potentially stale closure.
+        const freshScript = useProjectStore.getState().script;
+
+        if (!freshScript) {
+            showToast('请在此输入完整的全剧本或长小说内容后再点击架构分析', 'error');
+            return;
+        }
+
+        // Clear chapter selection so the ScriptEditor shows the full script,
+        // not a single chapter, after analysis completes.
+        setSelectedChapterId(null);
 
         try {
-            const { characters: charDrafts, scenes: sceneDrafts } = await extractAssets(script, globalContext.script_engine);
+            setIsAnalyzing(true);
+            setError(null);
+            setStatusMessage('Step 1 / 全剧架构分析：正在进行章节切分...');
+            setProgress(10);
 
-            setStatusMessage('正在构建视觉 DNA (角色与场景)...');
-            setProgress(20);
+            // Step 1 ONLY: Partition Chapters
+            const chapters = await partitionIntoChapters(freshScript, globalContext.script_engine);
 
-            // 1. Forge Characters
-            const forgedCharacters: any[] = [];
-            for (const char of charDrafts) {
-                const dna = await forgeCharacterDNA(char, globalContext);
-                forgedCharacters.push(dna);
+            if (!chapters || chapters.length === 0) {
+                showToast('章节切分失败：AI 未返回有效章节，请重试', 'error');
+                return;
             }
 
-            // 2. Forge Scenes
-            const forgedScenes: any[] = [];
-            for (const scene of sceneDrafts) {
-                const dna = await forgeSceneDNA(scene, globalContext);
-                forgedScenes.push(dna);
-            }
+            // Initialize Project Metadata (Chapter structure only, no assets yet)
+            const finalMetadata: ProjectMetadata = {
+                id: projectMetadata?.id || crypto.randomUUID(),
+                name: projectMetadata?.name || '未命名项目',
+                full_script: freshScript,
+                analysis_mode: 'Full_Script',
+                bpm: 120,
+                energy_level: 'Medium',
+                overall_mood: 'Neural',
+                chapters: chapters,
+                transitions: []
+            };
 
-            // 3. Update Global Context to persist in store (and UI dashboard)
-            updateGlobalContext({
-                characters: forgedCharacters,
-                scenes: forgedScenes
-            });
+            setProjectMetadata(finalMetadata);
 
-            setStatusMessage('正在拆解分镜...');
-            setProgress(40);
-
-            const { metadata, initial_script } = await generateStoryboard(script, forgedCharacters, forgedScenes, globalContext.script_engine);
-
-            // Add Project ID for IndexedDB
-            metadata.id = `proj_${Date.now()}`;
-            setProjectMetadata(metadata);
-            setStoryboard(initial_script.map((shot: any, i: number) => ({
-                ...shot,
-                id: `shot_${Date.now()}_${i}`,
-                shot_number: i + 1,
-                render_status: 'idle',
-                video_status: 'idle',
-                isLocked: false,
-                candidate_image_urls: []
-            })));
-
+            setStatusMessage(`架构分析完成：共切分为 ${chapters.length} 个章节`);
+            setProgress(100);
+            setActiveView('episodes');
+            showToast(`全剧已切分为 ${chapters.length} 个章节。请进入 Step 2 提取角色与场景资产。`, 'success');
+        } catch (err: any) {
+            setError(err.message || '全剧分析失败');
+        } finally {
             setIsAnalyzing(false);
-            setActiveView('storyboard');
-            showToast('分镜生成完成', 'success');
-
-        } catch (err) {
-            handleError(err);
         }
     };
 
@@ -127,10 +274,30 @@ export const useAppWorkflow = () => {
         setProgress(5);
 
         try {
-            const { characters: charDrafts, scenes: sceneDrafts } = await extractAssets(script, globalContext.script_engine);
+            const { characters: charDrafts, scenes: sceneDrafts } = await extractAssets(script, globalContext, globalContext.script_engine);
+
+            // DEBUG: Log extraction results
+            console.log('[Extract] Characters:', charDrafts.map((c: any) => ({
+                name: c.name,
+                has_prompt: !!c.consistency_seed_prompt,
+                prompt_len: (c.consistency_seed_prompt || '').length,
+                prompt_preview: (c.consistency_seed_prompt || '').substring(0, 80)
+            })));
+            console.log('[Extract] Scenes:', sceneDrafts.map((s: any) => ({
+                name: s.name,
+                has_prompt: !!s.visual_anchor_prompt,
+                prompt_len: (s.visual_anchor_prompt || '').length,
+                prompt_preview: (s.visual_anchor_prompt || '').substring(0, 80)
+            })));
+
+            // Initialize store with all drafts immediately so they are visible with initial prompts
+            updateGlobalContext({
+                characters: charDrafts || [],
+                scenes: sceneDrafts || []
+            });
 
             // 1. Forge Scenes & Auto-Render
-            const forgedScenes: any[] = [];
+            const forgedScenes = [...(sceneDrafts || [])];
             for (let i = 0; i < sceneDrafts.length; i++) {
                 if (i > 0) await new Promise(r => setTimeout(r, 2000));
 
@@ -145,10 +312,11 @@ export const useAppWorkflow = () => {
                     setStatusMessage(`正在绘制场景: ${draft.name}...`);
                     try {
                         const url = await generateVisualPreview(
-                            globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
-                            `(Scene: ${dna.visual_anchor_prompt}), cinematic wide shot, masterpiece, ${globalContext.visual_style_preset}`,
+                            globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
+                            applyStyleConstitution(`(Scene: ${dna.visual_anchor_prompt}), cinematic wide shot`, globalContext),
                             dna.seed,
-                            '16:9'
+                            '16:9',
+                            dna.reference_image_url ? [dna.reference_image_url] : undefined
                         );
                         // Save to IndexedDB (as Image)
                         const dbUrl = await AssetDBService.saveAsset(
@@ -158,11 +326,12 @@ export const useAppWorkflow = () => {
                             url
                         );
                         dna.preview_url = dbUrl;
-                    } catch (e) {
+                    } catch (e: any) {
                         console.error(`Auto-render scene ${draft.name} failed`, e);
+                        showToast(`场景 ${draft.name} 自动绘制失败: ${e.message}`, 'error');
                     }
 
-                    forgedScenes.push(dna);
+                    forgedScenes[i] = dna;
                     updateGlobalContext({ scenes: [...forgedScenes] });
                 } catch (err) {
                     console.error(`场景 ${draft.name} 生成失败`, err);
@@ -184,7 +353,7 @@ export const useAppWorkflow = () => {
 
 
             // 2. Forge Characters & Auto-Render
-            const forgedChars: any[] = [];
+            const forgedChars = [...(charDrafts || [])];
             for (let i = 0; i < charDrafts.length; i++) {
                 await new Promise(r => setTimeout(r, 2000));
 
@@ -199,10 +368,11 @@ export const useAppWorkflow = () => {
                     setStatusMessage(`正在绘制角色: ${draft.name}...`);
                     try {
                         const url = await generateVisualPreview(
-                            globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                            globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                             dna.consistency_seed_prompt,
                             dna.seed,
-                            '16:9'
+                            '16:9',
+                            dna.reference_image_url ? [dna.reference_image_url] : undefined
                         );
                         // Save to IndexedDB (as Image)
                         const dbUrl = await AssetDBService.saveAsset(
@@ -212,11 +382,12 @@ export const useAppWorkflow = () => {
                             url
                         );
                         dna.preview_url = dbUrl;
-                    } catch (e) {
+                    } catch (e: any) {
                         console.error(`Auto-render char ${draft.name} failed`, e);
+                        showToast(`角色 ${draft.name} 自动绘制失败: ${e.message}`, 'error');
                     }
 
-                    forgedChars.push(dna);
+                    forgedChars[i] = dna;
                     // Update store incrementally so user sees progress
                     updateGlobalContext({ characters: [...forgedChars] });
                 } catch (err: any) {
@@ -224,8 +395,50 @@ export const useAppWorkflow = () => {
                     showToast(`角色 ${draft.name} 处理失败`, 'error');
                 }
             }
+
+            // === FALLBACK: Auto-build visual DNA for any asset missing prompts ===
+            const finalScenes = forgedScenes.map((s: any) => {
+                if (!s.visual_anchor_prompt || s.visual_anchor_prompt.length < 10) {
+                    // Build a prompt from available extraction data
+                    const parts = [
+                        s.name ? `Scene: ${s.name}` : '',
+                        s.core_lighting ? `Lighting: ${s.core_lighting}` : '',
+                        s.description ? s.description : '',
+                        s.key_elements?.length ? `Key elements: ${s.key_elements.join(', ')}` : '',
+                        globalContext.visual_style_preset ? `Style: ${globalContext.visual_style_preset}` : '',
+                        'cinematic wide shot, masterpiece, 4k, ultra-detailed'
+                    ].filter(Boolean).join(', ');
+                    console.log(`[Fallback] Built scene prompt for ${s.name}: ${parts.substring(0, 80)}...`);
+                    return { ...s, visual_anchor_prompt: parts };
+                }
+                return s;
+            });
+
+            const finalChars = forgedChars.map((c: any) => {
+                if (!c.consistency_seed_prompt || c.consistency_seed_prompt.length < 10) {
+                    // Build a JSON prompt from available extraction data
+                    const fallbackDNA = {
+                        "Instruction_Role": "Master Character Designer & Concept Architect",
+                        "Identity_Consistency_Protocol": {
+                            "Target_Subject": `${c.description || c.name}`,
+                            "Identity_Lock": "Mandatory 100% facial and costume consistency across all views.",
+                            "Core_Elements": `${c.outfit || ''} ${c.physical_traits || ''}`
+                        },
+                        "Visual_Style_Module": {
+                            "Style_Definition": globalContext.visual_style_preset || "cinematic",
+                            "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed, soft cinematic lighting",
+                            "Background": "Solid neutral grey studio background"
+                        }
+                    };
+                    const prompt = JSON.stringify(fallbackDNA, null, 2);
+                    console.log(`[Fallback] Built character prompt for ${c.name}: ${prompt.substring(0, 80)}...`);
+                    return { ...c, consistency_seed_prompt: prompt };
+                }
+                return c;
+            });
+
             // Final update to ensure consistency
-            updateGlobalContext({ characters: forgedChars });
+            updateGlobalContext({ characters: finalChars, scenes: finalScenes });
 
             setIsAnalyzing(false);
             setActiveView('foundry');
@@ -246,10 +459,11 @@ export const useAppWorkflow = () => {
             if (globalContext.environment && !globalContext.environment.preview_url) {
                 setStatusMessage('正在渲染环境概念图...');
                 const url = await generateVisualPreview(
-                    globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                    globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                     `${globalContext.environment.visual_anchor_prompt}, cinematic wide shot, masterpiece`,
                     Math.floor(Math.random() * 1000000),
-                    '16:9'
+                    '16:9',
+                    globalContext.environment.preview_url ? [globalContext.environment.preview_url] : undefined
                 );
                 const dbUrl = await AssetDBService.saveAsset(
                     'env_preview',
@@ -270,10 +484,11 @@ export const useAppWorkflow = () => {
 
                 try {
                     const url = await generateVisualPreview(
-                        globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                         `Character Portrait: ${char.consistency_seed_prompt}, ${globalContext.visual_style_preset}`,
                         char.seed,
-                        '16:9'
+                        '16:9',
+                        char.reference_image_url ? [char.reference_image_url] : undefined
                     );
                     const dbUrl = await AssetDBService.saveAsset(
                         `char_${char.char_id}`,
@@ -302,12 +517,13 @@ export const useAppWorkflow = () => {
 
         showToast(`正在重新渲染 ${char.name}...`, 'info');
         try {
-            const prompt = customPrompt || `Character Portrait: ${char.consistency_seed_prompt}, ${globalContext.visual_style_preset}`;
+            const prompt = customPrompt || applyStyleConstitution(`Character Portrait: ${char.consistency_seed_prompt}`, globalContext);
             const url = await generateVisualPreview(
-                globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                 prompt,
                 Math.floor(Math.random() * 1000000),
-                '16:9'
+                '16:9',
+                char.reference_image_url ? [char.reference_image_url] : undefined
             );
             const dbUrl = await AssetDBService.saveAsset(
                 `char_${charId}`,
@@ -317,8 +533,8 @@ export const useAppWorkflow = () => {
             );
             updateCharacter(charId, { preview_url: dbUrl });
             showToast('渲染完成', 'success');
-        } catch (err) {
-            showToast('渲染失败', 'error');
+        } catch (err: any) {
+            showToast(`渲染失败: ${err.message}`, 'error');
             console.error(err);
         }
     };
@@ -329,12 +545,13 @@ export const useAppWorkflow = () => {
 
         showToast(`正在重新渲染场景: ${scene.name}...`, 'info');
         try {
-            const prompt = customPrompt || `${scene.visual_anchor_prompt}, cinematic wide shot, masterpiece`;
+            const prompt = customPrompt || applyStyleConstitution(`${scene.visual_anchor_prompt}, cinematic wide shot`, globalContext);
             const url = await generateVisualPreview(
-                globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                 prompt,
                 Math.floor(Math.random() * 1000000),
-                '16:9'
+                '16:9',
+                scene.reference_image_url ? [scene.reference_image_url] : undefined
             );
             const dbUrl = await AssetDBService.saveAsset(
                 `scene_${sceneId}`,
@@ -344,8 +561,8 @@ export const useAppWorkflow = () => {
             );
             updateScene(sceneId, { preview_url: dbUrl });
             showToast('场景渲染完成', 'success');
-        } catch (err) {
-            showToast('场景渲染失败', 'error');
+        } catch (err: any) {
+            showToast(`场景渲染失败: ${err.message}`, 'error');
             console.error(err);
         }
     };
@@ -355,6 +572,7 @@ export const useAppWorkflow = () => {
         const chars = globalContext.characters;
         const total = scenes.length + chars.length;
         let done = 0;
+        let failedCount = 0;
 
         showToast(`开始生成全部资产 (${total} 项)...`, 'info');
 
@@ -364,10 +582,11 @@ export const useAppWorkflow = () => {
             try {
                 showToast(`渲染场景: ${scene.name} (${done + 1}/${total})...`, 'info');
                 const url = await generateVisualPreview(
-                    globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                    globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                     `${scene.visual_anchor_prompt}, cinematic wide shot, masterpiece`,
                     Math.floor(Math.random() * 1000000),
-                    '16:9'
+                    '16:9',
+                    scene.reference_image_url ? [scene.reference_image_url] : undefined
                 );
                 const dbUrl = await AssetDBService.saveAsset(
                     `scene_${scene.scene_id}`,
@@ -379,6 +598,7 @@ export const useAppWorkflow = () => {
             } catch (err: any) {
                 console.error(`Scene ${scene.name} render failed`, err);
                 showToast(`场景 ${scene.name} 生成失败: ${err.message || '未知错误'}`, 'error');
+                failedCount++;
             }
             done++;
         }
@@ -389,10 +609,11 @@ export const useAppWorkflow = () => {
             try {
                 showToast(`渲染角色: ${char.name} (${done + 1}/${total})...`, 'info');
                 const url = await generateVisualPreview(
-                    globalContext.image_engine === 'qwen2512' ? 'nb_pro' : globalContext.image_engine,
+                    globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
                     `Character Portrait: ${char.consistency_seed_prompt}, ${globalContext.visual_style_preset}`,
                     char.seed,
-                    '16:9'
+                    '16:9',
+                    char.reference_image_url ? [char.reference_image_url] : undefined
                 );
                 const dbUrl = await AssetDBService.saveAsset(
                     `char_${char.char_id}`,
@@ -404,11 +625,16 @@ export const useAppWorkflow = () => {
             } catch (err: any) {
                 console.error(`Character ${char.name} render failed`, err);
                 showToast(`角色 ${char.name} 生成失败: ${err.message || '未知错误'}`, 'error');
+                failedCount++;
             }
             done++;
         }
 
-        showToast('全部资产生成完成！', 'success');
+        if (failedCount > 0) {
+            showToast(`资产生成完成，但有 ${failedCount} 项失败。`, 'info');
+        } else {
+            showToast('全部资产生成完成！', 'success');
+        }
     };
 
     // ========== Step 4: Storyboard Rendering ==========
@@ -422,23 +648,25 @@ export const useAppWorkflow = () => {
             const scene = globalContext.scenes.find(s => s.scene_id === item.scene_id);
             const prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
 
-            // Build reference images for RunningHub
+            // Build reference images for RunningHub (Prioritize Confirmed Reference over Preview)
             const refImages: string[] = [];
-            if (globalContext.image_engine === 'runninghub' || globalContext.image_engine === 'nb_pro' || globalContext.image_engine === 'qwen2512') {
+            if (globalContext.image_engine === 'runninghub' || globalContext.image_engine === 'nb2' || globalContext.image_engine === 'qwen2512') {
                 globalContext.characters.forEach(c => {
-                    if (item.character_ids?.includes(c.char_id) && c.preview_url) {
-                        refImages.push(c.preview_url);
+                    if (item.character_ids?.includes(c.char_id)) {
+                        const bestRef = c.reference_image_url || c.preview_url;
+                        if (bestRef) refImages.push(bestRef);
                     }
                 });
-                if (scene?.preview_url) {
-                    refImages.push(scene.preview_url);
+                const sceneRef = scene?.reference_image_url || scene?.preview_url;
+                if (sceneRef) {
+                    refImages.push(sceneRef);
                 }
             }
             const url = await generateVisualPreview(
                 globalContext.image_engine,
                 prompt,
                 item.seed,
-                globalContext.aspect_ratio,
+                (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio,
                 refImages.length > 0 ? refImages : undefined
             );
 
@@ -472,6 +700,19 @@ export const useAppWorkflow = () => {
             const scene = globalContext.scenes.find(s => s.scene_id === item.scene_id);
             const prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
 
+            // Build reference images (Prioritize Confirmed Reference over Preview)
+            const refImages: string[] = [];
+            if (globalContext.image_engine === 'runninghub' || globalContext.image_engine === 'nb2' || globalContext.image_engine === 'qwen2512') {
+                globalContext.characters.forEach(c => {
+                    if (item.character_ids?.includes(c.char_id)) {
+                        const bestRef = c.reference_image_url || c.preview_url;
+                        if (bestRef) refImages.push(bestRef);
+                    }
+                });
+                const sceneRef = scene?.reference_image_url || scene?.preview_url;
+                if (sceneRef) refImages.push(sceneRef);
+            }
+
             // For candidates, we generate a batch with different seeds
             const promises = Array.from({ length: count }).map((_, i) => {
                 const seed = (item.seed || 12345) + (i * 100);
@@ -479,7 +720,8 @@ export const useAppWorkflow = () => {
                     globalContext.image_engine,
                     prompt,
                     seed,
-                    globalContext.aspect_ratio
+                    (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio,
+                    refImages.length > 0 ? refImages : undefined
                 );
             });
 
@@ -517,9 +759,18 @@ export const useAppWorkflow = () => {
         updateShot(item.id, { video_status: 'generating' });
         try {
             const scene = globalContext.scenes.find(s => s.scene_id === item.scene_id);
-            const prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
 
-            const url = await generateVideoForShot(prompt, globalContext.aspect_ratio, globalContext.video_engine);
+            // Use pre-generated video prompt from storyboard breakdown if available,
+            // otherwise fall back to LLM image prompt generation.
+            let prompt: string;
+            if (item.ai_prompts?.video_generation_prompt) {
+                prompt = item.ai_prompts.video_generation_prompt;
+            } else {
+                prompt = await generateImagePrompt(item, globalContext.characters, scene, globalContext.environment, globalContext);
+            }
+
+            const videoEngine = item.video_engine || globalContext.video_engine;
+            const url = await generateVideoForShot(prompt, (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio, videoEngine, item.preview_url);
 
             // Save video clip to DB
             const dbUrl = await AssetDBService.saveAsset(
@@ -688,6 +939,127 @@ export const useAppWorkflow = () => {
         }
     };
 
+    const handleInsertShot = async (index: number, description: string) => {
+        if (!description.trim()) return;
+        setIsAnalyzing(true);
+        setStatusMessage('正在分析新分镜其关联资产...');
+        try {
+            // 1. AI Analysis
+            const newShot = await analyzeShotInsertion(description, globalContext, storyboard);
+
+            // 2. Insert into Store
+            insertShotAt(index, newShot);
+
+            // 3. Auto-render the new shot
+            setStatusMessage('正在绘制新分镜...');
+
+            const scene = globalContext.scenes.find(s => s.scene_id === newShot.scene_id);
+            const prompt = await generateImagePrompt(newShot, globalContext.characters, scene, globalContext.environment, globalContext);
+
+            const url = await generateVisualPreview(
+                globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
+                applyStyleConstitution(prompt || newShot.image_prompt || newShot.action_description, globalContext),
+                newShot.seed,
+                (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
+            );
+
+            // Save to DB
+            const dbUrl = await AssetDBService.saveAsset(
+                `shot_${newShot.id}`,
+                projectMetadata?.id || 'default',
+                'image',
+                url
+            );
+
+            updateShot(newShot.id, {
+                preview_url: dbUrl,
+                render_status: 'done',
+                image_prompt: prompt,
+                candidate_image_urls: [dbUrl]
+            });
+
+            showToast('新分镜已插入并绘制完成', 'success');
+        } catch (err: any) {
+            console.error('Insert shot failed', err);
+            showToast(`插入分镜失败: ${err.message}`, 'error');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleDeriveShots = async (anchorShot: StoryboardItem) => {
+        setIsAnalyzing(true);
+        setStatusMessage('AI 导演正在推导前后关联分镜...');
+        try {
+            // 1. Derive Context (2 before, 2 after)
+            const derivedShots = await deriveShotsFromAnchor(anchorShot, script, globalContext);
+            if (!derivedShots || derivedShots.length === 0) {
+                throw new Error('AI 推导返回结果为空');
+            }
+
+            // The AI returns [prev2, prev1, next1, next2]
+            const prevShots = derivedShots.slice(0, 2);
+            const nextShots = derivedShots.slice(2, 4);
+
+            const anchorIndex = storyboard.findIndex(s => s.id === anchorShot.id);
+            if (anchorIndex === -1) return;
+
+            // 2. Insert into Store
+            // We insert nextShots AFTER anchor, then prevShots BEFORE anchor
+            // To keep stability, let's do it in one batch if we update the helper
+            // Or just two calls. Let's use two calls to insertShotsBatch for clarity.
+
+            // Insert after (index + 1)
+            insertShotsBatch(anchorIndex + 1, nextShots);
+            // Insert before (anchorIndex is same position, it will push anchor ahead)
+            insertShotsBatch(anchorIndex, prevShots);
+
+            showToast('已推导并补充 4 个关联分镜，系统正在自动绘制...', 'success');
+
+            // 3. Batch Render derived shots
+            // We need the NEW ids to render
+            const allNewShots = [...prevShots, ...nextShots];
+
+            for (const shot of allNewShots) {
+                setStatusMessage(`正在绘制推导分镜: #${shot.shot_number || '...'} `);
+                try {
+                    const scene = globalContext.scenes.find(s => s.scene_id === shot.scene_id);
+                    const prompt = await generateImagePrompt(shot, globalContext.characters, scene, globalContext.environment, globalContext);
+
+                    const url = await generateVisualPreview(
+                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
+                        applyStyleConstitution(prompt || shot.image_prompt || shot.action_description, globalContext),
+                        shot.seed,
+                        (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
+                    );
+
+                    const dbUrl = await AssetDBService.saveAsset(
+                        `shot_${shot.id}`,
+                        projectMetadata?.id || 'default',
+                        'image',
+                        url
+                    );
+
+                    updateShot(shot.id, {
+                        preview_url: dbUrl,
+                        render_status: 'done',
+                        image_prompt: prompt,
+                        candidate_image_urls: [dbUrl]
+                    });
+                } catch (renderErr) {
+                    console.error('Failed to render derived shot', renderErr);
+                }
+            }
+
+            showToast('推导分镜全部绘制完成', 'success');
+        } catch (err: any) {
+            console.error('Derive shots failed', err);
+            showToast(`分镜推导失败: ${err.message}`, 'error');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     const repairProjectAssets = async () => {
         if (!projectMetadata?.id) return;
 
@@ -744,6 +1116,9 @@ export const useAppWorkflow = () => {
         batchRenderAllVideos,
         handleMasterSynthesis,
         repairProjectAssets,
-        cancelBatch
+        cancelBatch,
+        handleFullScriptAnalysis,
+        handleInsertShot,
+        handleDeriveShots
     };
 };

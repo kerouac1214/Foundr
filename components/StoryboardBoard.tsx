@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import StoryboardCard from './StoryboardCard';
 import { StoryboardItem, GlobalContext } from '../types';
+import { VIDEO_ENGINES } from '../constants';
 
 interface StoryboardBoardProps {
     className?: string;
@@ -11,6 +12,8 @@ interface StoryboardBoardProps {
     mode?: 'text-only' | 'visual';
     layout?: 'list' | 'grid';
     viewMode?: 'images_only' | 'videos_only';
+    onInsertShot: (index: number, description: string) => Promise<void>;
+    onDeriveShot: (item: StoryboardItem) => Promise<void>;
 }
 
 /* --- Detail Modal --- */
@@ -137,7 +140,7 @@ const ShotDetailModal: React.FC<{
                                     <img
                                         src={item.preview_url}
                                         className="w-full h-full object-cover relative z-0"
-                                        alt={`Shot ${item.shot_number || currentIndex + 1}`}
+                                        alt={`镜头 ${item.shot_number || currentIndex + 1}`}
                                     />
 
                                     {/* Video Play Overlay */}
@@ -280,6 +283,29 @@ const ShotDetailModal: React.FC<{
                                 </div>
                             </div>
 
+                            {/* Video Engine Override */}
+                            <div className="pt-6 border-t border-white/5 space-y-3">
+                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">视频引擎 (镜头独立)</label>
+                                <div className="flex flex-wrap gap-1 p-1 bg-black/40 rounded-xl border border-white/5">
+                                    <button
+                                        onClick={() => onUpdate({ video_engine: undefined })}
+                                        className={`px-2 py-1.5 rounded-lg transition-all text-[9px] font-bold uppercase ${!item.video_engine ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    >
+                                        默认
+                                    </button>
+                                    {VIDEO_ENGINES.map(engine => (
+                                        <button
+                                            key={engine.value}
+                                            onClick={() => onUpdate({ video_engine: engine.value as any })}
+                                            className={`px-2 py-1.5 rounded-lg transition-all text-[9px] font-bold uppercase ${item.video_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                            title={engine.desc}
+                                        >
+                                            {engine.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {/* Prompt X-Ray (P1) */}
                             <div className="pt-6 border-t border-white/5">
                                 <button
@@ -325,23 +351,64 @@ const ShotDetailModal: React.FC<{
 };
 
 
-const StoryboardBoard: React.FC<StoryboardBoardProps> = ({ className, onRenderPhoto, onRenderCandidates, onRenderVideo, mode = 'visual', layout = 'list', viewMode }) => {
-    const storyboard = useProjectStore((state) => state.storyboard);
-    const globalContext = useProjectStore((state) => state.globalContext);
-    const updateShot = useProjectStore((state) => state.updateShot);
+const InsertShotModal: React.FC<{
+    onClose: () => void;
+    onInsert: (description: string) => void;
+    index: number;
+}> = ({ onClose, onInsert, index }) => {
+    const [description, setDescription] = useState('');
 
-    const [selectedShot, setSelectedShot] = useState<StoryboardItem | null>(null);
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+            <div className="bg-[#121212] border border-white/10 p-8 rounded-3xl w-full max-w-xl shadow-2xl">
+                <h3 className="text-xl font-bold text-white mb-2">在第 {index} 个位置后插入新镜头</h3>
+                <p className="text-zinc-500 text-sm mb-6">请输入对新镜头的自然语言描述，AI 将自动分析角色并生成提示词</p>
 
-    if (!storyboard || storyboard.length === 0) {
-        return (
-            <div className={`flex items-center justify-center h-[50vh] text-zinc-500 ${className}`}>
-                <div className="text-center space-y-4">
-                    <p className="text-xl font-bold">暂无分镜</p>
-                    <p className="text-sm">请先在剧本页面生成分镜</p>
+                <textarea
+                    autoFocus
+                    placeholder="例如：马克在雨夜走进实验室，看到笼子里发光的小鸟..."
+                    className="w-full h-40 bg-black/40 border border-white/10 rounded-2xl p-4 text-white text-sm focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] outline-none resize-none mb-6"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                />
+
+                <div className="flex justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm"
+                    >
+                        取消
+                    </button>
+                    <button
+                        onClick={() => {
+                            onInsert(description);
+                            onClose();
+                        }}
+                        disabled={!description.trim()}
+                        className="px-8 py-2 bg-[#D4AF37] hover:bg-[#F0D060] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-bold rounded-xl transition-all shadow-lg active:scale-95"
+                    >
+                        确认插入并绘制
+                    </button>
                 </div>
             </div>
-        );
-    }
+        </div>
+    );
+};
+
+const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
+    className,
+    onRenderPhoto,
+    onRenderCandidates,
+    onRenderVideo,
+    mode = 'visual',
+    layout = 'list',
+    viewMode,
+    onInsertShot,
+    onDeriveShot
+}) => {
+    const { storyboard, globalContext, updateShot } = useProjectStore();
+    const [selectedItem, setSelectedItem] = useState<StoryboardItem | null>(null);
+    const [insertIdx, setInsertIdx] = useState<number | null>(null);
 
     // Function to handle rendering within modal context
     // We need to pass the index of the CURRENT selected shot
@@ -353,6 +420,8 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({ className, onRenderPh
         if (type === 'video') await onRenderVideo(idx);
     };
 
+    const itemsToRender = storyboard; // Assuming storyboard is the source for items
+
     return (
         <div className={`animate-in fade-in duration-700 ${className}`}>
             <div className="flex justify-between items-end border-b border-white/10 pb-6 mb-6">
@@ -362,35 +431,79 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({ className, onRenderPh
                 </div>
             </div>
 
-            <div className={layout === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'space-y-6'}>
-                {storyboard.map((item, idx) => (
-                    <StoryboardCard
-                        key={item.id}
-                        item={item}
-                        context={globalContext}
-                        onUpdate={(u) => updateShot(item.id, u)}
-                        onRenderPhoto={() => onRenderPhoto(idx)}
-                        onRenderVideo={() => onRenderVideo(idx)}
-                        mode={mode}
-                        viewMode={viewMode}
-                        // Only enable click in visual mode (which implies Step 4)
-                        onImageClick={mode === 'visual' ? () => setSelectedShot(item) : undefined}
-                    />
+            {/* Board Container */}
+            <div className={`p-8 pb-32 ${layout === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6' : 'flex flex-col gap-8 max-w-5xl mx-auto'}`}>
+                {itemsToRender.map((item, index) => (
+                    <React.Fragment key={item.id}>
+                        {/* Insertion before first item if at top */}
+                        {index === 0 && (
+                            <div className="flex justify-center -mb-4 group/insert opacity-0 hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => setInsertIdx(0)}
+                                    className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] text-zinc-500 hover:text-[#D4AF37] hover:bg-white/10 hover:border-[#D4AF37]/30 transition-all font-bold uppercase tracking-widest"
+                                >
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                    在顶部插入新分镜
+                                </button>
+                            </div>
+                        )}
+
+                        <StoryboardCard
+                            item={item}
+                            context={globalContext}
+                            mode={mode}
+                            layout={layout}
+                            onUpdate={(updates) => updateShot(item.id, updates)}
+                            onRenderPhoto={() => onRenderPhoto(index)}
+                            onRenderCandidates={() => onRenderCandidates(index)}
+                            onRenderVideo={() => onRenderVideo(index)}
+                            onImageClick={() => setSelectedItem(item)}
+                            onDerive={() => onDeriveShot(item)}
+                        />
+
+                        {/* Insertion Point AFTER each card */}
+                        <div className="flex justify-center -my-4 group/insert opacity-0 hover:opacity-100 transition-opacity relative z-10">
+                            <button
+                                onClick={() => setInsertIdx(index + 1)}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] text-zinc-500 hover:text-[#D4AF37] hover:bg-white/10 hover:border-[#D4AF37]/30 transition-all font-bold uppercase tracking-widest"
+                            >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                在此处插入新分镜
+                            </button>
+                        </div>
+                    </React.Fragment>
                 ))}
+
+                {/* Empty State */}
+                {itemsToRender.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-40 text-zinc-600 grayscale">
+                        <svg className="w-20 h-20 mb-6 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        <p className="uppercase tracking-[0.3em] text-xs font-black">等待分镜方案生成...</p>
+                    </div>
+                )}
             </div>
 
+            {/* Insertion Modal */}
+            {insertIdx !== null && (
+                <InsertShotModal
+                    index={insertIdx}
+                    onClose={() => setInsertIdx(null)}
+                    onInsert={(desc) => onInsertShot(insertIdx, desc)}
+                />
+            )}
+
             {/* Detail Modal */}
-            {selectedShot && (
+            {selectedItem && (
                 <ShotDetailModal
-                    item={selectedShot}
+                    item={selectedItem}
                     context={globalContext}
-                    onClose={() => setSelectedShot(null)}
-                    onUpdate={(u) => updateShot(selectedShot.id, u)}
-                    onRenderPhoto={() => handleRenderCurrent(selectedShot, 'photo')}
-                    onRenderCandidates={() => handleRenderCurrent(selectedShot, 'candidates')}
-                    onRenderVideo={() => handleRenderCurrent(selectedShot, 'video')}
+                    onClose={() => setSelectedItem(null)}
+                    onUpdate={(u) => updateShot(selectedItem.id, u)}
+                    onRenderPhoto={() => handleRenderCurrent(selectedItem, 'photo')}
+                    onRenderCandidates={() => handleRenderCurrent(selectedItem, 'candidates')}
+                    onRenderVideo={() => handleRenderCurrent(selectedItem, 'video')}
                     allItems={storyboard}
-                    onNavigate={setSelectedShot}
+                    onNavigate={setSelectedItem}
                 />
             )}
         </div>
