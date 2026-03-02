@@ -219,7 +219,7 @@ export class Glm5Provider implements ScriptProvider {
 - **动作离散化演算法**：任何具有叙事权重的动态瞬间严禁合并在单一分镜中。
 - **提示词双轨制 (Dual-Prompting System)**：
     - **Image Prompt**：专注画面构图、人物泛化特征、光影、材质、相机参数。
-    - **Video Prompt**：专注画面内物理元素的运动和镜头极其微小的推拉摇移。
+    - **Video Prompt**：专注画面内物理元素的运动和镜头极其微小的推拉摇移。必须注入物理规律自动推演指令：包含流体动力学、重力与加速度、碰撞与形变、动力学一致性。
 
 ### 3. 输出格式
 必须严格返回 JSON：
@@ -242,8 +242,16 @@ export class Glm5Provider implements ScriptProvider {
       "lyric_line": "台词",
       "ai_prompts": {
         "image_generation_prompt": "中文生图提示词",
-        "video_generation_prompt": "中文视频提示词"
-      }
+        "video_generation_prompt": "中文视频提示词 (包含物理仿真指令)"
+      },
+      "script_content": "剧本详细内容原文",
+      "image_description": "画面视觉描述",
+      "dialogue": "角色台词 (若有)",
+      "action_state": "角色当前动作状态详细描述",
+      "narrative_function": "叙事功能",
+      "time_coord": "时间坐标",
+      "era_coord": "年代坐标",
+      "date_coord": "日期坐标"
     }
   ]
 }
@@ -288,7 +296,15 @@ export class Glm5Provider implements ScriptProvider {
                         video_generation_prompt: vidPrompt
                     },
                     image_prompt: imgPrompt,
-                    video_prompt: vidPrompt
+                    video_prompt: vidPrompt,
+                    script_content: s.script_content || s.剧本内容 || "",
+                    image_description: s.image_description || s.画面描述 || "",
+                    dialogue: s.dialogue || s.台词 || s.lyric_line || "",
+                    action_state: s.action_state || s.动作状态 || "",
+                    narrative_function: s.narrative_function || s.叙事功能 || "",
+                    time_coord: s.time_coord || s.时间坐标 || "",
+                    era_coord: s.era_coord || s.年代坐标 || "",
+                    date_coord: s.date_coord || s.日期坐标 || ""
                 };
             });
 
@@ -316,6 +332,12 @@ export class Glm5Provider implements ScriptProvider {
                       "Visual_Style_Module": {
                         "Style_Definition": "Hyper-realistic cinematic photography",
                         "Rendering_Specifics": "8k RAW photo, ultra-detailed textures, cinematic lighting"
+                      },
+                      "Master_Layout_Grid": {
+                        "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
+                        "Left_Zone": "One prominent, high-fidelity full-body photo (主图全身照). Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+                        "Top_Right_Zone": "3-view technical full-body orthographic drawings (全身照三视图: Front, Side, Back) for modeling reference.",
+                        "Bottom_Right_Zone": "3-view face close-up technical drawings (面部特写三视图: Front, 45-degree, Profile) focusing on texture and facial details."
                       }
                     }`
                 }

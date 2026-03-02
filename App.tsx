@@ -20,6 +20,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import EpisodeDashboard from './components/EpisodeDashboard';
 import ChapterSidebar from './components/ChapterSidebar';
 import LoadingInsights from './components/LoadingInsights';
+import AIChatAssistant from './components/AIChatAssistant';
 
 const App: React.FC = () => {
   // Store State (Reactive with Selectors)
@@ -453,6 +454,7 @@ const App: React.FC = () => {
             }}
           />
         )}
+        <AIChatAssistant />
       </div>
     </ErrorBoundary>
   );

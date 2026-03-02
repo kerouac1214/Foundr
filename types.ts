@@ -180,6 +180,16 @@ export interface StoryboardItem {
   composition?: string;
   reference_image_url?: string;
   candidate_image_urls?: string[];
+
+  // Detailed Narrative Metadata
+  script_content?: string;     // 剧本内容
+  image_description?: string;  // 画面描述
+  dialogue?: string;           // 台词
+  action_state?: string;       // 动作状态
+  narrative_function?: string; // 叙事功能
+  time_coord?: string;         // 时间坐标
+  era_coord?: string;          // 年代坐标
+  date_coord?: string;         // 日期坐标
 }
 
 export interface AppState {

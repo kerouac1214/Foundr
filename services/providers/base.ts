@@ -35,6 +35,7 @@ export interface ScriptProvider {
         env: EnvironmentDNA | undefined,
         context: GlobalContext
     ): Promise<string>;
+    chat?(messages: any[]): Promise<string>;
 }
 
 export interface ImageProvider {

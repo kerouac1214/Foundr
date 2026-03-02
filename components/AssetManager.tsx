@@ -51,6 +51,8 @@ const PromptEditor: React.FC<{
                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                     <textarea
                         value={editPrompt}
+                        title="编辑提示词"
+                        placeholder="在此编辑用于生成的提示词..."
                         onChange={e => setEditPrompt(e.target.value)}
                         className="w-full bg-white/5 p-4 rounded-xl border border-white/10 text-zinc-300 text-[10px] mono leading-relaxed h-28 outline-none focus:border-[#D4AF37]/50 resize-none"
                     />
@@ -131,6 +133,7 @@ const DetailModal: React.FC<{
     onRemoveReference?: (id: string, url: string) => void;
     onCloneVoice?: (id: string, audioUrl: string, text: string) => void;
     onRefineDNA?: (name: string, description: string, type: 'character' | 'scene', id: string) => void;
+    onDelete?: (id: string, type: 'character' | 'scene') => void;
     isCloning?: boolean;
     stylePreset: string;
 }> = ({
@@ -146,6 +149,7 @@ const DetailModal: React.FC<{
     onRemoveReference,
     onCloneVoice,
     onRefineDNA,
+    onDelete,
     isCloning,
     stylePreset
 }) => {
@@ -162,7 +166,7 @@ const DetailModal: React.FC<{
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 md:p-12 animate-in fade-in duration-200">
                 {/* Close Button */}
-                <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors z-[60]">
+                <button onClick={onClose} className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors z-[60]" title="Close Modal">
                     <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
 
@@ -187,13 +191,27 @@ const DetailModal: React.FC<{
                     {/* Right: Controls */}
                     <div className="w-full md:w-1/2 h-full overflow-y-auto p-8 md:p-12 space-y-8 bg-[#050505]">
                         {/* Header */}
-                        <div>
-                            <span className="text-[10px] font-black uppercase text-[#D4AF37] tracking-[0.4em] mb-2 block">{type === 'character' ? '角色资产' : '场景资产'}</span>
-                            <input
-                                value={asset.name}
-                                onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { name: e.target.value })}
-                                className="w-full bg-transparent border-none outline-none text-4xl font-black uppercase serif text-white placeholder-zinc-800"
-                            />
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                                <span className="text-[10px] font-black uppercase text-[#D4AF37] tracking-[0.4em] mb-2 block">{type === 'character' ? '角色资产' : '场景资产'}</span>
+                                <input
+                                    value={asset.name}
+                                    title="Asset Name"
+                                    onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { name: e.target.value })}
+                                    className="w-full bg-transparent border-none outline-none text-4xl font-black uppercase serif text-white placeholder-zinc-800"
+                                />
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (confirm(`确定要删除资产 "${asset.name}" 吗？此操作不可撤销。`)) {
+                                        onDelete?.(type === 'character' ? asset.char_id : asset.scene_id, type);
+                                    }
+                                }}
+                                className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl transition-all group"
+                                title="删除资产"
+                            >
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
                         </div>
 
                         <div className="space-y-2">
@@ -209,6 +227,7 @@ const DetailModal: React.FC<{
                             </div>
                             <textarea
                                 value={asset.description}
+                                title="Asset Description"
                                 onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { description: e.target.value })}
                                 className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-zinc-300 text-sm leading-relaxed h-32 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
                             />
@@ -219,6 +238,7 @@ const DetailModal: React.FC<{
                             <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">视觉 DNA (提示词)</label>
                             <textarea
                                 value={type === 'character' ? asset.consistency_seed_prompt : asset.visual_anchor_prompt}
+                                title="Visual DNA Prompt"
                                 onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
                                 className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-40 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
                             />
@@ -344,6 +364,7 @@ const DetailModal: React.FC<{
                                     <div className="flex-[2] space-y-2">
                                         <textarea
                                             value={asset.voice_sample_text || ''}
+                                            title="Voice Sample Text"
                                             onChange={e => onUpdate(asset.char_id, { voice_sample_text: e.target.value })}
                                             placeholder="用于声音样本的文字..."
                                             className="w-full bg-white/5 p-3 rounded-xl border border-white/10 text-xs text-zinc-300 h-[86px] resize-none outline-none"
@@ -387,7 +408,11 @@ const AssetManager: React.FC<AssetManagerProps> = ({
     const globalContext = useProjectStore((state) => state.globalContext);
     const updateCharacter = useProjectStore((state) => state.updateCharacter);
     const updateScene = useProjectStore((state) => state.updateScene);
+    const deleteCharacter = useProjectStore((state) => state.deleteCharacter);
+    const deleteScene = useProjectStore((state) => state.deleteScene);
     const updateGlobalContext = useProjectStore((state) => state.updateGlobalContext);
+
+    const { setIsAnalyzing, setStatusMessage, showToast } = useUIStore();
 
     const [selectedAsset, setSelectedAsset] = useState<SelectedAsset | null>(null);
     const [renderingId, setRenderingId] = useState<string | null>(null);
@@ -415,9 +440,10 @@ const AssetManager: React.FC<AssetManagerProps> = ({
 
     const handleExport = async () => {
         setIsAnalyzing(true);
+        setStatusMessage("正在准备素材，请稍候...");
         try {
             await exportProjectToZip(
-                "Project", // Could be dynamic if we had a project name
+                "Project",
                 script,
                 globalContext,
                 storyboard,
@@ -429,6 +455,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({
             showToast(`导出失败: ${error.message}`, "error");
         } finally {
             setIsAnalyzing(false);
+            setStatusMessage("");
         }
     };
 
@@ -516,6 +543,15 @@ const AssetManager: React.FC<AssetManagerProps> = ({
         } finally {
             setCloningId(null);
         }
+    };
+
+    const handleDeleteAsset = (id: string, type: 'character' | 'scene') => {
+        if (type === 'character') {
+            deleteCharacter(id);
+        } else {
+            deleteScene(id);
+        }
+        setSelectedAsset(null);
     };
 
     const hasAnyMissing = globalContext.scenes.some(s => !s.preview_url) || globalContext.characters.some(c => !c.preview_url);
@@ -641,6 +677,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({
                     onRemoveReference={handleRemoveReference}
                     onCloneVoice={handleCloneVoice}
                     onRefineDNA={onRefineDNA}
+                    onDelete={handleDeleteAsset}
                     isCloning={cloningId === selectedAsset.id}
                     stylePreset={globalContext.visual_style_preset}
                 />

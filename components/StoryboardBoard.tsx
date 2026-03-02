@@ -233,35 +233,39 @@ const ShotDetailModal: React.FC<{
                                             <div key={i} className="relative group/thumb">
                                                 <button
                                                     onClick={() => onSetPreview(item.id, url)}
+                                                    title="设置为预览图"
                                                     className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${item.preview_url === url ? 'border-[#D4AF37]' : 'border-transparent opacity-60 hover:opacity-100'}`}
                                                 >
                                                     <img src={url} className="w-full h-full object-cover" alt="" />
-                                                    {item.preview_url === url && (
-                                                        <div className="absolute inset-0 bg-[#D4AF37]/20 flex items-center justify-center">
-                                                            <svg className="w-4 h-4 text-[#D4AF37]" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                                        </div>
-                                                    )}
                                                 </button>
-
-                                                {/* Thumb Actions Overlay */}
                                                 <div className="absolute -top-1 -right-1 flex flex-col gap-1 opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onDeleteImage(item.id, url); }}
-                                                        className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-red-600 transition-colors"
-                                                        title="删除此版本"
-                                                    >
-                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onSetPreview(item.id, url, !item.isImageLocked); }}
-                                                        className={`w-5 h-5 rounded-full flex items-center justify-center shadow-lg transition-colors ${item.preview_url === url && item.isImageLocked ? 'bg-[#D4AF37] text-black' : 'bg-white/20 text-white hover:bg-white/40'}`}
-                                                        title={item.isImageLocked ? "解锁图像" : "锁定此图像作为预览"}
-                                                    >
-                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
-                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onDeleteImage(item.id, url); }} className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white" title="删除"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg></button>
                                                 </div>
                                             </div>
                                         ))}
+                                        {/* Upload Button */}
+                                        <label className="w-16 h-16 rounded-lg border-2 border-dashed border-white/10 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors group">
+                                            <svg className="w-4 h-4 text-white/20 group-hover:text-[#D4AF37] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                                            <span className="text-[8px] text-white/20 font-black uppercase">上传</span>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        const reader = new FileReader();
+                                                        reader.onloadend = () => {
+                                                            const result = reader.result as string;
+                                                            const current = item.candidate_image_urls || [];
+                                                            onUpdate({ candidate_image_urls: [...current, result] });
+                                                            onSetPreview(item.id, result);
+                                                        };
+                                                        reader.readAsDataURL(file);
+                                                    }
+                                                }}
+                                            />
+                                        </label>
                                     </div>
                                 </div>
                             )}
@@ -355,22 +359,59 @@ const ShotDetailModal: React.FC<{
                                     <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">音/画 描述</label>
                                     <div className="space-y-4">
                                         <div className="space-y-1">
-                                            <label className="text-[8px] text-zinc-600 uppercase">画面</label>
+                                            <label className="text-[8px] text-zinc-600 uppercase">画面 (Detailed Description)</label>
                                             <textarea
-                                                value={item.action_description}
-                                                onChange={(e) => onUpdate({ action_description: e.target.value })}
+                                                value={item.image_description || item.action_description}
+                                                onChange={(e) => onUpdate({ image_description: e.target.value, action_description: e.target.value })}
                                                 className="w-full bg-white/5 p-3 rounded-lg border border-white/10 text-zinc-300 text-[11px] leading-relaxed h-20 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
-                                                placeholder="描述动作..."
+                                                placeholder="详细画面描述..."
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-[8px] text-zinc-600 uppercase">对白/音频</label>
+                                            <label className="text-[8px] text-zinc-600 uppercase">对白 (Dialogue)</label>
                                             <textarea
-                                                value={item.lyric_line}
-                                                onChange={(e) => onUpdate({ lyric_line: e.target.value })}
+                                                value={item.dialogue || item.lyric_line}
+                                                onChange={(e) => onUpdate({ dialogue: e.target.value, lyric_line: e.target.value })}
                                                 className="w-full bg-white/5 p-3 rounded-lg border border-white/10 text-zinc-300 italic text-[11px] outline-none focus:border-[#D4AF37]/30 transition-colors resize-none h-16"
-                                                placeholder="对白..."
+                                                placeholder="角色台词..."
                                             />
+                                        </div>
+                                        {/* Additional Metadata */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-zinc-600 uppercase">动作状态 (Action State)</label>
+                                                <input
+                                                    value={item.action_state || ''}
+                                                    title="动作状态"
+                                                    placeholder="动作状态..."
+                                                    onChange={e => onUpdate({ action_state: e.target.value })}
+                                                    className="w-full bg-white/5 p-2 rounded-lg border border-white/10 text-zinc-300 text-[10px] outline-none"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-zinc-600 uppercase">叙事功能 (Narrative)</label>
+                                                <input
+                                                    value={item.narrative_function || ''}
+                                                    title="叙事功能"
+                                                    placeholder="叙事功能..."
+                                                    onChange={e => onUpdate({ narrative_function: e.target.value })}
+                                                    className="w-full bg-white/5 p-2 rounded-lg border border-white/10 text-zinc-300 text-[10px] outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-zinc-600 uppercase">时间</label>
+                                                <input value={item.time_coord || ''} title="时间坐标" placeholder="时间..." onChange={e => onUpdate({ time_coord: e.target.value })} className="w-full bg-white/5 p-2 rounded-lg border border-white/10 text-zinc-400 text-[9px] outline-none" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-zinc-600 uppercase">年代</label>
+                                                <input value={item.era_coord || ''} title="年代坐标" placeholder="年代..." onChange={e => onUpdate({ era_coord: e.target.value })} className="w-full bg-white/5 p-2 rounded-lg border border-white/10 text-zinc-400 text-[9px] outline-none" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] text-zinc-600 uppercase">日期</label>
+                                                <input value={item.date_coord || ''} title="日期坐标" placeholder="日期..." onChange={e => onUpdate({ date_coord: e.target.value })} className="w-full bg-white/5 p-2 rounded-lg border border-white/10 text-zinc-400 text-[9px] outline-none" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -394,6 +435,7 @@ const ShotDetailModal: React.FC<{
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         onClick={onDeriveThreeShots}
+                                        title="衍生三连帧"
                                         className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] text-zinc-300 font-bold uppercase transition-all"
                                     >
                                         <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
@@ -401,6 +443,7 @@ const ShotDetailModal: React.FC<{
                                     </button>
                                     <button
                                         onClick={onGenerateNarrativeGrid}
+                                        title="生成九宫格剧情"
                                         className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] text-zinc-300 font-bold uppercase transition-all"
                                     >
                                         <svg className="w-3.5 h-3.5 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
@@ -604,8 +647,8 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                 )}
             </div>
 
-            {/* Board Container */}
-            <div className={`p-8 pb-32 ${layout === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6' : 'flex flex-col gap-8 max-w-5xl mx-auto'}`}>
+            {/* Board Container: Enhanced Horizontal Layout with Snap */}
+            <div className={`p-8 pb-32 flex gap-8 overflow-x-auto scroll-smooth snap-x snap-mandatory no-scrollbar min-h-[600px] ${layout === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6' : ''}`}>
                 {itemsToRender.map((item, index) => (
                     <React.Fragment key={item.id}>
                         {/* Insertion before first item if at top */}
@@ -621,31 +664,33 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                             </div>
                         )}
 
-                        <StoryboardCard
-                            item={item}
-                            context={globalContext}
-                            mode={mode}
-                            layout={layout}
-                            viewMode={viewMode}
-                            onUpdate={(updates) => updateShot(item.id, updates)}
-                            onRenderPhoto={() => onRenderPhoto(index)}
-                            onRenderCandidates={() => onRenderCandidates(index)}
-                            onRenderVideo={() => onRenderVideo(index)}
-                            onImageClick={() => setSelectedItem(item)}
-                            onDerive={() => onDeriveShot(item)}
-                            onDeleteImage={(url) => deleteShotImage(item.id, url)}
-                            onSetPreview={(url, lock) => setShotPreviewImage(item.id, url, lock)}
-                        />
+                        <div className="snap-center shrink-0 w-[400px]">
+                            <StoryboardCard
+                                item={item}
+                                context={globalContext}
+                                mode={mode}
+                                layout={layout}
+                                viewMode={viewMode}
+                                onUpdate={(updates) => updateShot(item.id, updates)}
+                                onRenderPhoto={() => onRenderPhoto(index)}
+                                onRenderCandidates={() => onRenderCandidates(index)}
+                                onRenderVideo={() => onRenderVideo(index)}
+                                onImageClick={() => setSelectedItem(item)}
+                                onDerive={() => onDeriveShot(item)}
+                                onDeleteImage={(url) => deleteShotImage(item.id, url)}
+                                onSetPreview={(url, lock) => setShotPreviewImage(item.id, url, lock)}
+                            />
 
-                        {/* Insertion Point AFTER each card */}
-                        <div className="flex justify-center -my-4 group/insert opacity-0 hover:opacity-100 transition-opacity relative z-10">
-                            <button
-                                onClick={() => setInsertIdx(index + 1)}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] text-zinc-500 hover:text-[#D4AF37] hover:bg-white/10 hover:border-[#D4AF37]/30 transition-all font-bold uppercase tracking-widest"
-                            >
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                在此处插入新分镜
-                            </button>
+                            {/* Insertion Point AFTER each card */}
+                            <div className="flex justify-center mt-6 opacity-0 hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => setInsertIdx(index + 1)}
+                                    className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[10px] text-zinc-500 hover:text-[#D4AF37] hover:bg-white/10 hover:border-[#D4AF37]/30 transition-all font-bold uppercase tracking-widest"
+                                >
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                    插入后续
+                                </button>
+                            </div>
                         </div>
                     </React.Fragment>
                 ))}

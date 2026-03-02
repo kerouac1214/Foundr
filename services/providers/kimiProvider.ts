@@ -22,9 +22,13 @@ export class KimiProvider implements ScriptProvider {
         if (config.api_base) this.apiBase = config.api_base;
         if (config.api_key) this.apiKey = config.api_key;
         if (config.model_name) this.model = config.model_name;
+        // Default to kimi-2.5 if user hasn't specified a specific version and we are in multimodal context
+        if (!config.model_name && (this.model === 'kimi-latest' || this.model === 'kimi-v1-5k')) {
+            // Keep existing for script analysis, but for chat we might want to default to 2.5
+        }
     }
 
-    private async request(messages: any[], jsonMode: boolean = false) {
+    private async request(messages: any[], jsonMode: boolean = false, customModel?: string) {
         const response = await fetch(`${this.apiBase}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -32,7 +36,7 @@ export class KimiProvider implements ScriptProvider {
                 'Authorization': `Bearer ${this.apiKey}`
             },
             body: JSON.stringify({
-                model: this.model,
+                model: customModel || this.model,
                 messages,
                 response_format: jsonMode ? { type: "json_object" } : undefined,
                 temperature: 0.3,
@@ -47,6 +51,11 @@ export class KimiProvider implements ScriptProvider {
 
         const data = await response.json();
         return data.choices[0].message.content;
+    }
+
+    async chat(messages: any[]): Promise<string> {
+        // AI Chat Assistant specifically uses kimi-2.5 for multimodal support
+        return await this.request(messages, false, "kimi-2.5");
     }
 
     async structureEpisodes(script: string): Promise<{ status: ProjectStatus, episodes: Episode[] }> {
@@ -346,9 +355,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
         },
         "Master_Layout_Grid": {
           "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
-          "Left_Zone": "One prominent, high-fidelity portrait or master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
-          "Top_Right_Zone": "3-view technical orthographic drawings (Front, Side, Back) for modeling reference.",
-          "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and neutral facial details."
+          "Left_Zone": "One prominent, high-fidelity full-body photo (主图全身照). Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+          "Top_Right_Zone": "3-view technical full-body orthographic drawings (全身照三视图: Front, Side, Back) for modeling reference.",
+          "Bottom_Right_Zone": "3-view face close-up technical drawings (面部特写三视图: Front, 45-degree, Profile) focusing on texture and facial details."
         },
         "Visual_Style_Module": {
           "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
@@ -432,7 +441,11 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 - **强制视觉约束 (Mandatory Constraints)**：严禁使用任何形式的拼接图、多面板、九宫格、分屏或对比图。画面必须是无边框的，不能有画框或留白边缘。图像中绝对不能包含任何文字、字母、排版、标志、水印或海报元素（绿色的二进制代码必须作为视觉粒子特效融入画面，而不能作为排版文字覆盖在图片上）。
 - **提示词双轨制 (Dual-Prompting System)**：
     - **Image Prompt**：专注画面构图、人物泛化特征、光影、材质、相机参数与胶片质感。
-    - **Video Prompt**：专注画面内物理元素的运动和镜头极其微小的推拉摇移。
+    - **Video Prompt**：专注画面内物理元素的运动和镜头极其微小的推拉摇移。你必须在视频提示词中注入物理规律自动推演指令，包含：
+        *   **流体动力学 (Fluid Dynamics)**：如液体流动、烟雾扩散的真实感。
+        *   **重力与加速度 (Gravity & Acceleration)**：物体下落、抛物线的物理真实性。
+        *   **碰撞与形变 (Collision & Deformation)**：物体接触时的碰撞反馈、软体形变效果。
+        *   **动力学一致性 (Kinetic Consistency)**：确保运动符合真实世界物理常数。
 
 ### 3. 可选资产 (Available Assets)
 - **Characters**: [${charContext}]
@@ -462,8 +475,16 @@ content 是剧本原文的**完整拷贝**，不是摘要。
       "lyric_line": "台词 (分镜对应部分)",
       "ai_prompts": {
         "image_generation_prompt": "中文自然语言静态提示词",
-        "video_generation_prompt": "中文自然语言动态提示词"
-      }
+        "video_generation_prompt": "中文自然语言动态提示词 (包含物理仿真指令)"
+      },
+      "script_content": "剧本详细内容原文",
+      "image_description": "画面视觉描述",
+      "dialogue": "角色台词 (若有)",
+      "action_state": "角色当前动作状态详细描述",
+      "narrative_function": "该镜头的叙事功能或隐喻意义",
+      "time_coord": "时间坐标 (如: 夜晚)",
+      "era_coord": "年代坐标 (如: 现代)",
+      "date_coord": "日期坐标 (如: 普通工作日)"
     }
   ]
 }`
@@ -498,7 +519,15 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                 lyric_line: s.lyric_line,
                 character_ids: s.characters || [],
                 scene_id: s.scene,
-                ai_prompts: s.ai_prompts
+                ai_prompts: s.ai_prompts,
+                script_content: s.script_content,
+                image_description: s.image_description,
+                dialogue: s.dialogue,
+                action_state: s.action_state,
+                narrative_function: s.narrative_function,
+                time_coord: s.time_coord,
+                era_coord: s.era_coord,
+                date_coord: s.date_coord
             }));
 
             return { metadata, initial_script };
@@ -535,9 +564,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                       },
                       "Master_Layout_Grid": {
                         "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
-                        "Left_Zone": "One prominent, high-fidelity portrait or master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
-                        "Top_Right_Zone": "3-view technical orthographic drawings (Front, Side, Back) for modeling reference.",
-                        "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and neutral facial details."
+                        "Left_Zone": "One prominent, high-fidelity full-body photo (主图全身照). Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+                        "Top_Right_Zone": "3-view technical full-body orthographic drawings (全身照三视图: Front, Side, Back) for modeling reference.",
+                        "Bottom_Right_Zone": "3-view face close-up technical drawings (面部特写三视图: Front, 45-degree, Profile) focusing on texture and facial details."
                       },
                       "Visual_Style_Module": {
                         "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
@@ -606,7 +635,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                         "Canvas_Division": "Professional scene reference sheet. Aspect ratio 16:9.",
                         "Left_Zone": "One prominent, high-fidelity master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
                         "Top_Right_Zone": "Technical layout blueprint / schematic for spatial reference.",
-                        "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and key props."
+                        "Bottom_Right_Zone": "3 close-up shots focusing on texture, lighting, and key props."
                       },
                       "Visual_Style_Module": {
                         "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
@@ -659,9 +688,9 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                 },
                 "Master_Layout_Grid": {
                     "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
-                    "Left_Zone": "One prominent, high-fidelity portrait or master shot. Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
-                    "Top_Right_Zone": "3-view technical orthographic drawings (Front, Side, Back) for modeling reference.",
-                    "Bottom_Right_Zone": "Asset Detail Cluster: 3 close-up shots focusing on texture, lighting, and neutral facial details."
+                    "Left_Zone": "One prominent, high-fidelity full-body photo (主图全身照). Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
+                    "Top_Right_Zone": "3-view technical full-body orthographic drawings (全身照三视图: Front, Side, Back) for modeling reference.",
+                    "Bottom_Right_Zone": "3-view face close-up technical drawings (面部特写三视图: Front, 45-degree, Profile) focusing on texture and facial details."
                 },
                 "Visual_Style_Module": {
                     "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",

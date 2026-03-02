@@ -47,6 +47,8 @@ interface ProjectState {
     resetProject: () => void;
     addCharacter: (name: string) => string;
     addScene: (name: string) => string;
+    deleteCharacter: (charId: string) => void;
+    deleteScene: (sceneId: string) => void;
 
     // Batch Queue
     batchQueue: BatchTask[];
@@ -255,6 +257,20 @@ export const useProjectStore = create<ProjectState>()(
                 }));
                 return id;
             },
+
+            deleteCharacter: (charId) => set((state) => ({
+                globalContext: {
+                    ...state.globalContext,
+                    characters: state.globalContext.characters.filter((c) => c.char_id !== charId)
+                }
+            })),
+
+            deleteScene: (sceneId) => set((state) => ({
+                globalContext: {
+                    ...state.globalContext,
+                    scenes: state.globalContext.scenes.filter((s) => s.scene_id !== sceneId)
+                }
+            })),
 
             batchQueue: [],
             addToBatchQueue: (tasks) => set((state) => {
