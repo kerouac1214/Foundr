@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import StoryboardCard from './StoryboardCard';
 import { StoryboardItem, GlobalContext } from '../types';
-import { VIDEO_ENGINES, SHOT_TYPES, CAMERA_MOVEMENTS, COMPOSITION_SHOTS } from '../constants';
+import { VIDEO_ENGINES, SHOT_TYPES, CAMERA_MOVEMENTS, COMPOSITION_SHOTS, CAMERA_ANGLES } from '../constants';
 
 interface StoryboardBoardProps {
     className?: string;
@@ -98,7 +98,7 @@ const ShotDetailModal: React.FC<{
             }
         }, [item.id]);
 
-        const [showPrompt, setShowPrompt] = useState(false);
+        const [showPrompt, setShowPrompt] = useState(true);
         const [showVideo, setShowVideo] = useState(false);
 
         // Reset video view when navigating
@@ -320,20 +320,30 @@ const ShotDetailModal: React.FC<{
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">镜头类型与运镜</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <select
-                                            value={item.shot_type}
-                                            onChange={(e) => onUpdate({ shot_type: e.target.value })}
-                                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 outline-none"
-                                            title="镜头类型"
-                                        >
-                                            {SHOT_TYPES.map(st => <option key={st.value} value={st.value} className="bg-zinc-900">{st.label}</option>)}
-                                        </select>
+                                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">镜头类型、角度与运镜</label>
+                                    <div className="flex flex-col gap-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <select
+                                                value={item.shot_type}
+                                                onChange={(e) => onUpdate({ shot_type: e.target.value })}
+                                                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 outline-none hover:border-[#D4AF37]/30 transition-colors"
+                                                title="镜头类型"
+                                            >
+                                                {SHOT_TYPES.map(st => <option key={st.value} value={st.value} className="bg-zinc-900">{st.label}</option>)}
+                                            </select>
+                                            <select
+                                                value={item.camera_angle || 'Cinematic Eye-level'}
+                                                onChange={(e) => onUpdate({ camera_angle: e.target.value })}
+                                                className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 outline-none hover:border-[#D4AF37]/30 transition-colors"
+                                                title="拍摄角度"
+                                            >
+                                                {CAMERA_ANGLES.map(ca => <option key={ca.value} value={ca.value} className="bg-zinc-900">{ca.label}</option>)}
+                                            </select>
+                                        </div>
                                         <select
                                             value={item.camera_movement}
                                             onChange={(e) => onUpdate({ camera_movement: e.target.value })}
-                                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 outline-none"
+                                            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-zinc-300 outline-none hover:border-[#D4AF37]/30 transition-colors"
                                             title="运镜方式"
                                         >
                                             {CAMERA_MOVEMENTS.map(cm => <option key={cm.value} value={cm.value} className="bg-zinc-900">{cm.label}</option>)}

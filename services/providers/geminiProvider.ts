@@ -377,6 +377,7 @@ ${script}
     - 拆解分镜 3：【全景/WS】女主跌坐在地上，手撑着草坪，痛苦地看着车内（结果/反应）。
 - **光圈与景深优先 (Aperture & Depth of Field)**：静态帧必须设定焦段和光圈（如：50mm f/1.8 浅景深，或 24mm f/8 极深景深），**严禁在图像生成提示词中出现“运镜”指令**。
 - **AI 去描述化原则 (AI Prompt Generalization)**：在提示词中，**绝对禁止使用角色的具体名字**。将剧中人物替换为泛化词汇（如：A 32yo man, A blond 25yo woman），以便用户配合垫图使用。
+- **强制视觉约束 (Mandatory Constraints)**：严禁使用任何形式的拼接图、多面板、九宫格、分屏或对比图。画面必须是无边框的，不能有画框或留白边缘。图像中绝对不能包含任何文字、字母、排版、标志、水印或海报元素（绿色的二进制代码必须作为视觉粒子特效融入画面，而不能作为排版文字覆盖在图片上）。
 - **提示词双轨制 (Dual-Prompting System)**：
     - **Image Prompt**：专注画面构图、人物泛化特征、光影（基于场景 Lighting）、材质、相机参数与胶片质感。使用流畅的中文句子。
     - **Video Prompt**：专注画面内物理元素的运动（如：蒸汽上升、眼皮微动、手指摩挲）和镜头的极其微小的推拉摇移。使用流畅的中文句子。
@@ -859,10 +860,12 @@ ${sceneDesc}
 
 Requirements:
 - Write a continuous Chinese prompt describing the cinematic action.
+- **强制视觉约束 (Mandatory Constraints)**：严禁使用任何形式的拼接图、多面板、九宫格、分屏或对比图。画面必须是无边框的，不能有画框或留白边缘。图像中绝对不能包含任何文字、字母、排版、标志、水印或海报元素（绿色的二进制代码必须作为视觉粒子特效融入画面，而不能作为排版文字覆盖在图片上）。
 - CRITICAL IDENTITY LOCK: You MUST explicitly start your prompt by stating that the subjects are from the provided reference images.
   Example: "参考图1中的角色（穿着参考图中的标志性服装）和参考图2中的角色正在参考图3的场景中互动。"
 - COSTUME CONSISTENCY: Pay extreme attention to the (Costume: ...) details and ensure they are mentioned as being preserved from the reference image.
 - SPATIAL RELATIONSHIP: Based on the plot's ACTION, explicitly define the exact positional layout of the characters (e.g., "参考图1的角色站在画面左侧，面向坐在右侧的参考图2角色")。
+- **CINEMATOGRAPHY RECENTERING**: You MUST explicitly incorporate the specified **Shot Type** (${item.shot_type}) and **Angle** (${item.camera_angle || 'Cinematic Eye-level'}) into the Chinese description (e.g., "这是一个典型的[景别]镜头，采用[角度]拍摄...").
 - After establishing the layout and image references, continue seamlessly describing their action, expressions, the weather, lighting, and framing based on the parameters above using descriptive Chinese.
 - Output ONLY the final prompt string.`,
             });

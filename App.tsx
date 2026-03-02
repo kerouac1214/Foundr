@@ -19,6 +19,7 @@ import BatchProgressModal from './components/BatchProgressModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import EpisodeDashboard from './components/EpisodeDashboard';
 import ChapterSidebar from './components/ChapterSidebar';
+import LoadingInsights from './components/LoadingInsights';
 
 const App: React.FC = () => {
   // Store State (Reactive with Selectors)
@@ -62,7 +63,7 @@ const App: React.FC = () => {
     batchRenderAllPhotos,
     batchRenderAllVideos,
     handleMasterSynthesis,
-    repairProjectAssets,
+    hydrateAllAssets,
     cancelBatch,
     handleFullScriptAnalysis,
     handleInsertShot,
@@ -117,12 +118,12 @@ const App: React.FC = () => {
     }
   }, [selectedChapterId, projectMetadata]);
 
-  // Repair Assets on Load
+  // Repair and Hydrate Assets on Load
   React.useEffect(() => {
     if (projectMetadata?.id) {
-      repairProjectAssets();
+      hydrateAllAssets();
     }
-  }, [projectMetadata?.id]);
+  }, [projectMetadata?.id, hydrateAllAssets]);
 
   // Rate Limit / Retry logic (Simplified for now, moving elaborate logic to store/hook later if needed)
   const rateLimitCountdown = 0; // Placeholder until fully migrated
@@ -144,8 +145,8 @@ const App: React.FC = () => {
           <nav className="flex items-center gap-1 bg-black/30 p-1 rounded-lg border border-gray-800">
             <button onClick={() => setActiveView('context')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'context' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>剧本</button>
             <button onClick={() => setActiveView('episodes')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'episodes' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>分集</button>
-            <button onClick={() => setActiveView('storyboard')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'storyboard' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>看板</button>
             <button onClick={() => setActiveView('foundry')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'foundry' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>资产</button>
+            <button onClick={() => setActiveView('storyboard')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'storyboard' ? 'bg-director-accent text-white shadow-md' : 'text-gray-400 hover:text-white'}`}>看板</button>
             <div className="w-[1px] h-4 bg-gray-700 mx-1"></div>
             <button onClick={() => setActiveView('images')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'images' ? 'bg-[#D4AF37] text-black shadow-md' : 'text-gray-400 hover:text-[#D4AF37]'}`}>画面预演</button>
             <button onClick={() => setActiveView('video_fragments')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'video_fragments' ? 'bg-[#D4AF37] text-black shadow-md' : 'text-gray-400 hover:text-[#D4AF37]'}`}>分镜视频</button>
@@ -212,8 +213,8 @@ const App: React.FC = () => {
           )}
 
           <div className="flex-1 flex overflow-hidden">
-            {/* Chapter Sidebar (If in Full Script mode) */}
-            {projectMetadata?.chapters && projectMetadata.chapters.length > 0 && (activeView === 'context' || activeView === 'storyboard') && (
+            {/* Chapter Sidebar (If in Storyboard mode) */}
+            {projectMetadata?.chapters && projectMetadata.chapters.length > 0 && (activeView === 'storyboard') && (
               <ChapterSidebar
                 chapters={projectMetadata.chapters}
                 onSelectChapter={setSelectedChapterId}
@@ -301,6 +302,7 @@ const App: React.FC = () => {
                     onDeriveThreeShots={handleDeriveThreeShots}
                     onGenerateNarrativeGrid={handleGenerateNarrativeGrid}
                     onRefineShot={handleRefineShot}
+                    onRenderAll={batchRenderAllPhotos}
                   />
                 )}
 
@@ -328,6 +330,7 @@ const App: React.FC = () => {
                         onDeriveThreeShots={handleDeriveThreeShots}
                         onGenerateNarrativeGrid={handleGenerateNarrativeGrid}
                         onRefineShot={handleRefineShot}
+                        onRenderAll={activeView === 'images' ? batchRenderAllPhotos : batchRenderAllVideos}
                       />
                     </div>
 
@@ -394,8 +397,13 @@ const App: React.FC = () => {
         {/* Loading Overlay */}
         {isAnalyzing && (
           <div className="fixed inset-0 bg-black/98 backdrop-blur-[100px] z-[100] flex flex-col items-center justify-center animate-in fade-in">
-            <div className="w-32 h-32 bg-[#D4AF37] rounded-[2.5rem] flex items-center justify-center font-black italic text-5xl animate-pulse text-black mb-24">F</div>
-            <div className="w-full max-w-lg px-16 space-y-12">
+            <div className="w-16 h-16 bg-[#D4AF37] rounded-2xl flex items-center justify-center font-black italic text-2xl animate-pulse text-black mb-8">F</div>
+
+            <div className="w-full h-full flex items-center justify-center mb-12">
+              <LoadingInsights />
+            </div>
+
+            <div className="w-full max-w-lg px-16 space-y-8">
               <div className="flex justify-between items-end px-4">
                 <span className="text-[14px] font-black uppercase tracking-[0.8em] text-[#D4AF37] serif">{statusMessage}</span>
                 <span className="text-xl font-black mono text-zinc-300">{progress}%</span>

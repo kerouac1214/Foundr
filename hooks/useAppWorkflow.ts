@@ -18,8 +18,10 @@ import {
 import { extractAssets, generateStoryboard, structureEpisodes, partitionIntoChapters, extractGlobalAssets, refineAssetDNA } from '../services/scriptAnalysisService';
 import { videoSynthesisService } from '../services/videoSynthesisService';
 import { AssetDBService } from '../services/dbService';
-import { StoryboardItem, Episode, ProjectStatus, ProjectMetadata, Chapter, AnalysisMode } from '../types';
+import { StoryboardItem, Episode, ProjectStatus, ProjectMetadata, Chapter, AnalysisMode, BatchTask } from '../types';
 import { generateId } from '../utils';
+import JSZip from 'jszip';
+import { useEffect, useCallback } from 'react';
 
 export const useAppWorkflow = () => {
     // Store Access
@@ -35,10 +37,15 @@ export const useAppWorkflow = () => {
         updateEnvironment,
         insertShotAt,
         insertShotsBatch,
-        storyboard,
         projectMetadata,
+        storyboard,
         setSelectedChapterId,
-        setScript
+        setScript,
+        batchQueue,
+        addToBatchQueue,
+        updateBatchTask,
+        removeFromBatchQueue,
+        clearBatchQueue
     } = useProjectStore();
 
     const {
@@ -64,6 +71,63 @@ export const useAppWorkflow = () => {
         setError(error instanceof Error ? error.message : String(error));
     };
 
+    // ========== Task Queue Worker ==========
+    const processBatchQueue = async () => {
+        const state = useProjectStore.getState();
+        const queue = state.batchQueue;
+        if (queue.length === 0 || batchCancelledRef.current) return;
+
+        // Count currently processing tasks
+        const processingCount = queue.filter(t => t.status === 'processing').length;
+        const availableSlots = 3 - processingCount;
+
+        if (availableSlots <= 0) return;
+
+        // Find pending tasks to fill slots
+        const pendingTasks = queue.filter(t => t.status === 'pending').slice(0, availableSlots);
+
+        if (pendingTasks.length === 0 && processingCount === 0) {
+            // Queue is effectively empty or all failed/done
+            return;
+        }
+
+        // Start pending tasks in parallel
+        pendingTasks.forEach(async (task) => {
+            const currentStoryboard = useProjectStore.getState().storyboard;
+            const shotIndex = currentStoryboard.findIndex(s => s.id === task.id);
+
+            if (shotIndex === -1) {
+                removeFromBatchQueue(task.id, task.type);
+                processBatchQueue();
+                return;
+            }
+
+            updateBatchTask(task.id, task.type, { status: 'processing' });
+
+            try {
+                if (task.type === 'photo') {
+                    await renderSinglePhoto(shotIndex);
+                } else {
+                    await renderSingleVideo(shotIndex);
+                }
+                removeFromBatchQueue(task.id, task.type);
+                showToast(`镜号 ${currentStoryboard[shotIndex].shot_number} ${task.type === 'photo' ? '画面' : '视频'}渲染成功`, 'success');
+            } catch (err: any) {
+                console.error(`Queue Task Failed:`, err);
+                updateBatchTask(task.id, task.type, {
+                    status: 'failed',
+                    error: err.message,
+                    retryCount: task.retryCount + 1
+                });
+            } finally {
+                // When a task finishes, trigger next check
+                if (!batchCancelledRef.current) {
+                    processBatchQueue();
+                }
+            }
+        });
+    };
+
     // ========== Step 1: Analyze Script & Generate Storyboard ==========
     const handleEpisodicStructuring = async (targetScript: string): Promise<{ status: ProjectStatus, episodes: Episode[] } | null> => {
         try {
@@ -82,6 +146,86 @@ export const useAppWorkflow = () => {
             return null;
         }
     };
+
+    const hydrateAllAssets = useCallback(async () => {
+        const state = useProjectStore.getState();
+        const projectId = state.projectMetadata?.id;
+        if (!projectId) return;
+
+        console.log('[Hydration] Starting full hydration for project:', projectId);
+        try {
+            const assets = await AssetDBService.getAllProjectAssets(projectId);
+            if (assets.length === 0) {
+                console.log('[Hydration] No assets to hydrate');
+                return;
+            }
+            console.log(`[Hydration] Found ${assets.length} assets in IndexedDB`);
+
+            // 1. Hydrate Scenes & Characters in Global Context
+            const currentContext = state.globalContext;
+
+            // Helper to safely create blob URL
+            const getSafeUrl = (data: any) => {
+                if (!data) return '';
+                try {
+                    return URL.createObjectURL(data);
+                } catch (e) {
+                    console.warn('[Hydration] createObjectURL failed', e);
+                    return '';
+                }
+            };
+
+            const updatedScenes = currentContext.scenes.map(scene => {
+                const asset = assets.find(a => a.id === `scene_${scene.scene_id}`);
+                return asset ? { ...scene, preview_url: getSafeUrl(asset.data) } : scene;
+            });
+
+            const updatedChars = currentContext.characters.map(char => {
+                const asset = assets.find(a => a.id === `char_${char.char_id}`);
+                return asset ? { ...char, preview_url: getSafeUrl(asset.data) } : char;
+            });
+
+            updateGlobalContext({ scenes: updatedScenes, characters: updatedChars });
+
+            // 2. Hydrate Storyboard
+            const currentStoryboard = state.storyboard;
+            const hydratedStoryboard = await Promise.all(currentStoryboard.map(async (item) => {
+                const photoAsset = assets.find(a => a.id === AssetDBService.getDeterministicId('photo', item.id))
+                    || assets.find(a => a.id === `shot_${item.id}`);
+                const videoAsset = assets.find(a => a.id === AssetDBService.getDeterministicId('video', item.id));
+
+                const hydratedCandidates = await Promise.all((item.candidate_image_urls || []).map(async (existingUrl, i) => {
+                    const candId = AssetDBService.getDeterministicId('candidate', item.id, i);
+                    const candAsset = assets.find(a => a.id === candId);
+                    return candAsset ? getSafeUrl(candAsset.data) : existingUrl;
+                }));
+
+                return {
+                    ...item,
+                    preview_url: photoAsset ? getSafeUrl(photoAsset.data) : item.preview_url,
+                    video_url: videoAsset ? getSafeUrl(videoAsset.data) : item.video_url,
+                    candidate_image_urls: hydratedCandidates.filter((u): u is string => u !== null)
+                };
+            }));
+
+            setStoryboard(hydratedStoryboard);
+            console.log('[Hydration] Full hydration completed');
+        } catch (err) {
+            console.error('[Hydration] Failed:', err);
+        }
+    }, [updateGlobalContext, setStoryboard, projectMetadata?.id]);
+
+    // Auto-resume queue if tasks exist
+    useEffect(() => {
+        if (batchQueue.some(t => t.status === 'pending' || t.status === 'processing')) {
+            // If they were 'processing', reset to 'pending' to ensure they actually run
+            const tasksToReset = batchQueue.filter(t => t.status === 'processing');
+            tasksToReset.forEach(t => updateBatchTask(t.id, t.type, { status: 'pending' }));
+
+            console.log('[Queue] Auto-resuming batch queue...');
+            processBatchQueue();
+        }
+    }, []); // Only on mount
 
     const handleGenerateStoryboard = async (chapterId?: string) => {
         const targetScript = chapterId
@@ -181,26 +325,25 @@ export const useAppWorkflow = () => {
                 };
             }));
 
-            // Only update global context if it was empty (local extraction)
-            if (globalContext.characters.length === 0) {
-                updateGlobalContext({
-                    characters: characters.map((c: any) => ({
-                        ...c,
-                        is_anchored: false,
-                        physical_core: c.physical_core || { gender_age: '', facial_features: '', hair_style: '', distinguishing_marks: '' },
-                        costume_id: c.costume_id || { top: '', bottom: '', accessories: '' },
-                        // PRESERVE extraction prompts — do NOT clear them!
-                        consistency_seed_prompt: c.consistency_seed_prompt || '',
-                        seed: c.seed || Math.floor(Math.random() * 1000000)
-                    })),
-                    scenes: scenes.map((s: any) => ({
-                        ...s,
-                        // PRESERVE extraction prompts — do NOT clear them!
-                        visual_anchor_prompt: s.visual_anchor_prompt || '',
-                        seed: s.seed || Math.floor(Math.random() * 1000000)
-                    }))
-                });
-            }
+            // Always update global context to ensure Assets tab matches the storyboard
+            updateGlobalContext({
+                characters: characters.map((c: any) => ({
+                    ...c,
+                    is_anchored: false,
+                    physical_core: c.physical_core || { gender_age: '', facial_features: '', hair_style: '', distinguishing_marks: '' },
+                    costume_id: c.costume_id || { top: '', bottom: '', accessories: '' },
+                    // PRESERVE extraction prompts — do NOT clear them!
+                    consistency_seed_prompt: c.consistency_seed_prompt || '',
+                    seed: c.seed || Math.floor(Math.random() * 1000000)
+                })),
+                scenes: scenes.map((s: any) => ({
+                    ...s,
+                    is_anchored: false,
+                    // PRESERVE extraction prompts — do NOT clear them!
+                    visual_anchor_prompt: s.visual_anchor_prompt || '',
+                    seed: s.seed || Math.floor(Math.random() * 1000000)
+                }))
+            });
 
             setStatusMessage('准备就绪');
             setProgress(100);
@@ -245,7 +388,7 @@ export const useAppWorkflow = () => {
 
             // Initialize Project Metadata (Chapter structure only, no assets yet)
             const finalMetadata: ProjectMetadata = {
-                id: projectMetadata?.id || generateId(),
+                id: generateId(), // Force NEW project ID for fresh analysis
                 name: projectMetadata?.name || '未命名项目',
                 full_script: freshScript,
                 analysis_mode: 'Full_Script',
@@ -255,6 +398,11 @@ export const useAppWorkflow = () => {
                 chapters: chapters,
                 transitions: []
             };
+
+            // Clear previous state to prevent pollution
+            setStoryboard([]);
+            updateGlobalContext({ characters: [], scenes: [] });
+            clearBatchQueue();
 
             setProjectMetadata(finalMetadata);
 
@@ -708,17 +856,20 @@ export const useAppWorkflow = () => {
                 refImages.length > 0 ? refImages : undefined
             );
 
-            // Save finalized photo to DB
+            // Save finalized photo to DB with deterministic ID
+            const photoId = AssetDBService.getDeterministicId('photo', item.id);
             const dbUrl = await AssetDBService.saveAsset(
-                `shot_${item.id}_photo`,
+                photoId,
                 projectMetadata?.id || 'default',
                 'image',
                 url
             );
 
+            const newCandidates = [...(item.candidate_image_urls || []), dbUrl];
+
             updateShot(item.id, {
-                preview_url: dbUrl,
-                candidate_image_urls: [dbUrl], // First one is the default candidate
+                preview_url: item.isImageLocked ? item.preview_url : dbUrl,
+                candidate_image_urls: newCandidates,
                 render_status: 'done',
                 image_prompt: prompt
             });
@@ -764,19 +915,22 @@ export const useAppWorkflow = () => {
             });
 
             const urls = await Promise.all(promises);
-            // Save candidates to DB
-            const dbUrls = await Promise.all(urls.map((url, i) =>
-                AssetDBService.saveAsset(
-                    `shot_${item.id}_cand_${i}`,
+            // Save candidates to DB with deterministic IDs
+            const dbUrls = await Promise.all(urls.map((url, i) => {
+                const candId = AssetDBService.getDeterministicId('candidate', item.id, i);
+                return AssetDBService.saveAsset(
+                    candId,
                     projectMetadata?.id || 'default',
                     'candidate',
                     url
-                )
-            ));
+                );
+            }));
+
+            const newCandidates = [...(item.candidate_image_urls || []), ...dbUrls];
 
             updateShot(item.id, {
-                candidate_image_urls: dbUrls,
-                preview_url: dbUrls[0], // Set the first one as default
+                candidate_image_urls: newCandidates,
+                preview_url: item.isImageLocked ? item.preview_url : dbUrls[0], // Set the first new one as default if not locked
                 render_status: 'done',
                 image_prompt: prompt
             });
@@ -818,9 +972,10 @@ export const useAppWorkflow = () => {
 
             const url = await generateVideoForShot(prompt, (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio, videoEngine, item.preview_url);
 
-            // Save video clip to DB
+            // Save video clip to DB with deterministic ID
+            const videoId = AssetDBService.getDeterministicId('video', item.id);
             const dbUrl = await AssetDBService.saveAsset(
-                `shot_${item.id}_video`,
+                videoId,
                 projectMetadata?.id || 'default',
                 'video',
                 url
@@ -829,7 +984,7 @@ export const useAppWorkflow = () => {
             updateShot(item.id, { video_url: dbUrl, video_status: 'ready', image_prompt: prompt });
         } catch (err: any) {
             updateShot(item.id, { video_status: 'idle' });
-            showToast(`镜头 ${item.shot_number} 视频生成失败`, 'error');
+            showToast(`分镜 ${item.shot_number} 视频生成失败: ${err.message}`, 'error');
             throw err;
         }
     };
@@ -837,115 +992,47 @@ export const useAppWorkflow = () => {
     const batchRenderAllPhotos = async () => {
         if (storyboard.length === 0) return;
 
-        batchCancelledRef.current = false;
-        const startTime = Date.now();
-        let succeeded = 0;
-        let failed = 0;
-
-        const pendingShots = storyboard.map((s, i) => ({ ...s, index: i })).filter(s => !s.isLocked && !s.preview_url);
-        const total = pendingShots.length;
-
-        if (total === 0) {
-            showToast('所有镜头已渲染或已锁定', 'info');
-            setBatchProgress(null);
+        const pendingShots = storyboard.filter(s => !s.isLocked && !s.preview_url);
+        if (pendingShots.length === 0) {
+            showToast('所有内容已生产或被锁定', 'info');
             return;
         }
 
-        setBatchProgress({
-            total,
-            current: 0,
-            succeeded: 0,
-            failed: 0,
-            startTime,
-            operation: 'photo',
-            message: '准备开始批量渲染...'
-        });
+        const tasks: BatchTask[] = pendingShots.map(s => ({
+            id: s.id,
+            type: 'photo',
+            status: 'pending',
+            retryCount: 0,
+            addedTime: Date.now()
+        }));
 
-        for (let i = 0; i < total; i++) {
-            if (batchCancelledRef.current) break;
-
-            const shot = pendingShots[i];
-            setBatchProgress({
-                total,
-                current: i + 1,
-                succeeded,
-                failed,
-                startTime,
-                operation: 'photo',
-                currentShotNumber: shot.shot_number,
-                message: `正在渲染镜头 ${shot.shot_number}...`
-            });
-
-            try {
-                await renderSinglePhoto(shot.index);
-                succeeded++;
-            } catch (e) {
-                console.error(`Shot ${shot.index} failed`, e);
-                failed++;
-            }
-
-            // Slight delay to prevent rate limit
-            await new Promise(r => setTimeout(r, 1000));
-        }
-
-        setBatchProgress(null);
-        if (!batchCancelledRef.current) showToast(`批量渲染完成: 成功 ${succeeded}, 失败 ${failed}`, 'success');
+        addToBatchQueue(tasks);
+        batchCancelledRef.current = false;
+        processBatchQueue();
+        showToast(`已添加 ${tasks.length} 个画面渲染任务到队列`, 'success');
     };
 
     const batchRenderAllVideos = async () => {
         if (storyboard.length === 0) return;
 
-        batchCancelledRef.current = false;
-        // Filter shots that have preview but no video
-        const pendingShots = storyboard.map((s, i) => ({ ...s, index: i }))
-            .filter(s => !s.isLocked && s.preview_url && !s.video_url);
-        const total = pendingShots.length;
-
-        if (total === 0) {
+        const pendingShots = storyboard.filter(s => !s.isLocked && s.preview_url && !s.video_url);
+        if (pendingShots.length === 0) {
             showToast('没有可生成的视频任务', 'info');
             return;
         }
 
-        const startTime = Date.now();
-        let succeeded = 0;
-        let failed = 0;
+        const tasks: BatchTask[] = pendingShots.map(s => ({
+            id: s.id,
+            type: 'video',
+            status: 'pending',
+            retryCount: 0,
+            addedTime: Date.now()
+        }));
 
-        setBatchProgress({
-            current: 0,
-            total,
-            message: '准备合成与编译视频...',
-            succeeded,
-            failed,
-            operation: 'video',
-            startTime
-        });
-
-        for (let i = 0; i < total; i++) {
-            if (batchCancelledRef.current) break;
-
-            const shot = pendingShots[i];
-            setBatchProgress({
-                current: i + 1,
-                total,
-                message: `正在合成镜头 ${shot.shot_number} 视频...`,
-                succeeded,
-                failed,
-                operation: 'video',
-                startTime,
-                currentShotNumber: shot.shot_number
-            });
-
-            try {
-                await renderSingleVideo(shot.index);
-                succeeded++;
-            } catch (e) {
-                console.error(e);
-                failed++;
-            }
-        }
-
-        setBatchProgress(null);
-        if (!batchCancelledRef.current) showToast('批量合成完成', 'success');
+        addToBatchQueue(tasks);
+        batchCancelledRef.current = false;
+        processBatchQueue();
+        showToast(`已添加 ${tasks.length} 个视频合成任务到队列`, 'success');
     };
 
     const handleMasterSynthesis = async () => {
@@ -961,25 +1048,45 @@ export const useAppWorkflow = () => {
 
         try {
             let currentProg = 5;
-            const masterUrl = await videoSynthesisService.synthesize(storyboard, (msg) => {
+            const masterBlob = await videoSynthesisService.synthesize(storyboard, (msg) => {
                 setStatusMessage(`母带合成: ${msg}`);
                 // Simple progress increment
                 currentProg = Math.min(currentProg + 2, 95);
                 setProgress(currentProg);
             });
 
+            setStatusMessage('正在打包工程备份...');
+            const zip = new JSZip();
+
+            // 1. Add Video
+            zip.file(`Foundr_Master_${Date.now()}.mp4`, masterBlob);
+
+            // 2. Add Project Metadata & Storyboard (Backup)
+            const backupData = {
+                projectMetadata,
+                globalContext,
+                storyboard,
+                exportTime: new Date().toISOString(),
+                version: '1.1'
+            };
+            zip.file('project_backup.json', JSON.stringify(backupData, null, 2));
+
+            // 3. Generate ZIP container
+            const content = await zip.generateAsync({ type: 'blob' });
+            const zipUrl = URL.createObjectURL(content);
+
             setIsAnalyzing(false);
             setProgress(100);
 
             // Create a temporary link to download
             const link = document.createElement('a');
-            link.href = masterUrl;
-            link.download = `Foundr_Master_${Date.now()}.mp4`;
+            link.href = zipUrl;
+            link.download = `Foundr_Project_Package_${Date.now()}.zip`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
-            showToast('母带合成完成并已开始下载', 'success');
+            showToast('母带合成与工程备份已打包下载', 'success');
         } catch (err) {
             handleError(err);
         }
@@ -1009,9 +1116,10 @@ export const useAppWorkflow = () => {
                 (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
             );
 
-            // Save to DB
+            // Save to DB with deterministic ID
+            const photoId = AssetDBService.getDeterministicId('photo', newShot.id);
             const dbUrl = await AssetDBService.saveAsset(
-                `shot_${newShot.id}`,
+                photoId,
                 projectMetadata?.id || 'default',
                 'image',
                 url
@@ -1079,8 +1187,9 @@ export const useAppWorkflow = () => {
                         (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
                     );
 
+                    const photoId = AssetDBService.getDeterministicId('photo', shot.id);
                     const dbUrl = await AssetDBService.saveAsset(
-                        `shot_${shot.id}`,
+                        photoId,
                         projectMetadata?.id || 'default',
                         'image',
                         url
@@ -1106,11 +1215,11 @@ export const useAppWorkflow = () => {
         }
     };
 
-    const handleDeriveThreeShots = async (anchorShot: StoryboardItem) => {
+    const handleDeriveThreeShots = async (anchorShot: StoryboardItem, userPrompt?: string) => {
         setIsAnalyzing(true);
-        setStatusMessage('AI 导演正在推导关联三连分镜...');
+        setStatusMessage(userPrompt ? 'AI 导演正在根据您的指令推导分镜...' : 'AI 导演正在推导关联三连分镜...');
         try {
-            const derivedShots = await deriveNarrativeTrinity(anchorShot, script, globalContext);
+            const derivedShots = await deriveNarrativeTrinity(anchorShot, script, globalContext, userPrompt);
             if (!derivedShots || derivedShots.length === 0) throw new Error('AI 推导返回结果为空');
 
             const anchorIndex = storyboard.findIndex(s => s.id === anchorShot.id);
@@ -1130,7 +1239,8 @@ export const useAppWorkflow = () => {
                         shot.seed,
                         (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
                     );
-                    const dbUrl = await AssetDBService.saveAsset(`shot_${shot.id}`, projectMetadata?.id || 'default', 'image', url);
+                    const photoId = AssetDBService.getDeterministicId('photo', shot.id);
+                    const dbUrl = await AssetDBService.saveAsset(photoId, projectMetadata?.id || 'default', 'image', url);
                     updateShot(shot.id, { preview_url: dbUrl, render_status: 'done', image_prompt: prompt, candidate_image_urls: [dbUrl] });
                 } catch (e) { console.error(e); }
             }
@@ -1167,7 +1277,8 @@ export const useAppWorkflow = () => {
                         shot.seed,
                         (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
                     );
-                    const dbUrl = await AssetDBService.saveAsset(`shot_${shot.id}`, projectMetadata?.id || 'default', 'image', url);
+                    const photoId = AssetDBService.getDeterministicId('photo', shot.id);
+                    const dbUrl = await AssetDBService.saveAsset(photoId, projectMetadata?.id || 'default', 'image', url);
                     updateShot(shot.id, { preview_url: dbUrl, render_status: 'done', image_prompt: prompt, candidate_image_urls: [dbUrl] });
                 } catch (e) { console.error(e); }
             }
@@ -1194,8 +1305,9 @@ export const useAppWorkflow = () => {
                 refImages
             );
 
+            const photoId = AssetDBService.getDeterministicId('photo', item.id);
             const dbUrl = await AssetDBService.saveAsset(
-                `shot_${item.id}_refined_${Date.now()}`,
+                photoId,
                 projectMetadata?.id || 'default',
                 'image',
                 url
@@ -1214,47 +1326,6 @@ export const useAppWorkflow = () => {
         }
     };
 
-    const repairProjectAssets = async () => {
-        if (!projectMetadata?.id) return;
-
-        setStatusMessage('正在从本地数据库恢复项资产...');
-        try {
-            const assets = await AssetDBService.getAllProjectAssets(projectMetadata.id);
-            if (assets.length === 0) return;
-
-            // 1. Repair Scenes
-            const updatedScenes = [...globalContext.scenes];
-            for (let i = 0; i < updatedScenes.length; i++) {
-                const asset = assets.find(a => a.id === `scene_${updatedScenes[i].scene_id}`);
-                if (asset) updatedScenes[i].preview_url = URL.createObjectURL(asset.data);
-            }
-
-            // 2. Repair Characters
-            const updatedChars = [...globalContext.characters];
-            for (let i = 0; i < updatedChars.length; i++) {
-                const asset = assets.find(a => a.id === `char_${updatedChars[i].char_id}`);
-                if (asset) updatedChars[i].preview_url = URL.createObjectURL(asset.data);
-            }
-
-            updateGlobalContext({ scenes: updatedScenes, characters: updatedChars });
-
-            // 3. Repair Storyboard
-            for (const shot of storyboard) {
-                const photoAsset = assets.find(a => a.id === `shot_${shot.id}_photo`);
-                const videoAsset = assets.find(a => a.id === `shot_${shot.id}_video`);
-                if (photoAsset || videoAsset) {
-                    updateShot(shot.id, {
-                        preview_url: photoAsset ? URL.createObjectURL(photoAsset.data) : shot.preview_url,
-                        video_url: videoAsset ? URL.createObjectURL(videoAsset.data) : shot.video_url
-                    });
-                }
-            }
-
-            showToast('已从本地缓存恢复资产', 'success');
-        } catch (err) {
-            console.error('Failed to repair assets', err);
-        }
-    };
 
     return {
         handleGenerateStoryboard,
@@ -1269,7 +1340,7 @@ export const useAppWorkflow = () => {
         batchRenderAllPhotos,
         batchRenderAllVideos,
         handleMasterSynthesis,
-        repairProjectAssets,
+        hydrateAllAssets,
         cancelBatch,
         handleFullScriptAnalysis,
         handleInsertShot,

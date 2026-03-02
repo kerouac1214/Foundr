@@ -61,6 +61,15 @@ export const CAMERA_MOVEMENTS = [
     { value: 'Orbit', label: '环绕' },
 ] as const;
 
+export const CAMERA_ANGLES = [
+    { value: 'Cinematic Eye-level', label: '平视 (标准)' },
+    { value: 'Low Angle', label: '低角度 (俯拍)' },
+    { value: 'High Angle', label: '高角度 (仰拍)' },
+    { value: 'Bird Eye View', label: '鸟瞰/上帝视角' },
+    { value: 'Extreme Low Angle', label: '极端低角度' },
+    { value: 'Dutch Angle', label: '荷兰斜角' },
+] as const;
+
 export const COMPOSITION_SHOTS = [
     { value: 'Standard', label: '标准构图', desc: '常规镜头' },
     { value: 'OTS', label: '过肩镜头 (OTS)', desc: '从一个人肩膀后拍另一个人。拍对话最常用，自然、有互动感。' },
