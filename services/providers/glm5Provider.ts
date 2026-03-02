@@ -155,27 +155,35 @@ export class Glm5Provider implements ScriptProvider {
             ], true);
             const result = parseJSONRobust(content, { characters: [], scenes: [] });
 
-            const characters = (result.characters || result.角色 || result.Character_Assets || []).map((c: any) => ({
-                id: c.char_id || c.id || generateId(),
-                name: c.name || c.姓名 || "未知角色",
-                description: c.description || c.描述 || "",
-                consistency_seed_prompt: c.consistency_seed_prompt || c.提示词 || c.prompt || "",
-                physical_core: c.physical_core || { gender_age: "", facial_features: "", hair_style: "", distinguishing_marks: "" },
-                costume_id: c.costume_id || { top: "", bottom: "", accessories: "" },
-                seed: Math.floor(Math.random() * 1000000)
-            }));
+            const characters = (result.characters || result.角色 || result.Character_Assets || []).map((c: any) => {
+                const char_id = c.char_id || c.id || generateId();
+                return {
+                    id: char_id,
+                    char_id: char_id,
+                    name: c.name || c.姓名 || "未知角色",
+                    description: c.description || c.描述 || "",
+                    consistency_seed_prompt: c.consistency_seed_prompt || c.提示词 || c.prompt || "",
+                    physical_core: c.physical_core || { gender_age: "", facial_features: "", hair_style: "", distinguishing_marks: "" },
+                    costume_id: c.costume_id || { top: "", bottom: "", accessories: "" },
+                    seed: Math.floor(Math.random() * 1000000)
+                };
+            });
 
-            const scenes = (result.scenes || result.场景 || result.Scene_Assets || []).map((s: any) => ({
-                id: s.scene_id || s.id || generateId(),
-                name: s.name || s.场景名 || "未知场景",
-                description: s.description || s.描述 || "",
-                visual_anchor_prompt: s.visual_anchor_prompt || s.提示词 || s.prompt || "",
-                narrative_importance: s.narrative_importance || 'Transition',
-                relevant_scene_ids: s.relevant_scene_ids || [],
-                core_lighting: s.core_lighting || "",
-                key_elements: s.key_elements || [],
-                seed: Math.floor(Math.random() * 1000000)
-            }));
+            const scenes = (result.scenes || result.场景 || result.Scene_Assets || []).map((s: any) => {
+                const scene_id = s.scene_id || s.id || generateId();
+                return {
+                    id: scene_id,
+                    scene_id: scene_id,
+                    name: s.name || s.场景名 || "未知场景",
+                    description: s.description || s.描述 || "",
+                    visual_anchor_prompt: s.visual_anchor_prompt || s.提示词 || s.prompt || "",
+                    narrative_importance: s.narrative_importance || 'Transition',
+                    relevant_scene_ids: s.relevant_scene_ids || [],
+                    core_lighting: s.core_lighting || "",
+                    key_elements: s.key_elements || [],
+                    seed: Math.floor(Math.random() * 1000000)
+                };
+            });
 
             return { characters, scenes };
         });
