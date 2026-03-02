@@ -21,7 +21,7 @@ export interface ScriptProvider {
     extractAssets(script: string, context: GlobalContext, engine?: AIEngine): Promise<{ characters: any[], scenes: any[] }>;
     analyzeShotInsertion(description: string, context: GlobalContext, surroundingShots: StoryboardItem[]): Promise<StoryboardItem>;
     deriveShotsFromAnchor(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
-    deriveNarrativeTrinity(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
+    deriveNarrativeTrinity(anchorShot: StoryboardItem, script: string, context: GlobalContext, userPrompt?: string): Promise<StoryboardItem[]>;
     generateNarrativeGrid(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]>;
     structureEpisodes(script: string): Promise<{ status: ProjectStatus, episodes: Episode[] }>;
     generateStoryboard(script: string, characters: any[], scenes: any[]): Promise<{ metadata: ProjectMetadata, initial_script: any[] }>;

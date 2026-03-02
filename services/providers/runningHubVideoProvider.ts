@@ -2,6 +2,7 @@ import { AspectRatio } from "../../types";
 import { withRetry } from "../core";
 import { VideoProvider } from "./base";
 import { uploadFile, runWorkflow, pollTask, runViduQ2Pro, runSeedance15 } from "../runningHubService";
+import { proxyRunningHubUrl } from "../../utils/urlUtils";
 
 export class RunningHubVideoProvider implements VideoProvider {
     private workflowIdWan2_2 = "2027632357276131329"; // Wan2.2
@@ -18,10 +19,7 @@ export class RunningHubVideoProvider implements VideoProvider {
     }
 
     private async urlToBlob(url: string): Promise<Blob> {
-        let fetchUrl = url;
-        if (url.includes('rh-images-1252422369.cos.ap-beijing.myqcloud.com')) {
-            fetchUrl = url.replace('https://rh-images-1252422369.cos.ap-beijing.myqcloud.com', '/rh-images');
-        }
+        let fetchUrl = proxyRunningHubUrl(url);
         const resp = await fetch(fetchUrl);
         if (!resp.ok) throw new Error(`[Video] Failed to fetch image from ${url}`);
         return await resp.blob();
@@ -46,7 +44,7 @@ export class RunningHubVideoProvider implements VideoProvider {
                     prompt,
                     imageUrl: uploadedImageUrl
                 }, this.config);
-                return await pollTask(taskId, this.config, 500000);
+                return await pollTask(taskId, this.config, 600000);
             }
 
             if (this.currentEngine === 'seedance_1_5') {
@@ -56,24 +54,22 @@ export class RunningHubVideoProvider implements VideoProvider {
                     prompt,
                     imageUrl: uploadedImageUrl
                 }, this.config);
-                return await pollTask(taskId, this.config, 500000);
+                return await pollTask(taskId, this.config, 600000);
             }
 
-            // Workflow engines (e.g. Wan2.2)
-            let targetWorkflow = this.workflowIdWan2_2;
+            // Workflow engines (e.g. Wan2.2, or generic runninghub setting)
+            const targetWorkflow = this.workflowIdWan2_2;
             const nodeInfoList: any[] = [];
 
-            if (this.currentEngine === 'wan2_2') {
-                targetWorkflow = this.workflowIdWan2_2;
-                nodeInfoList.push({ nodeId: "10", fieldName: "prompt", fieldValue: prompt });
-                if (uploadedImageUrl) {
-                    nodeInfoList.push({ nodeId: "4", fieldName: "image", fieldValue: uploadedImageUrl });
-                }
+            // Default workflow logic for Wan2.2 and others
+            nodeInfoList.push({ nodeId: "10", fieldName: "prompt", fieldValue: prompt });
+            if (uploadedImageUrl) {
+                nodeInfoList.push({ nodeId: "4", fieldName: "image", fieldValue: uploadedImageUrl });
             }
 
-            console.log(`[VideoProvider] Submitting to RunningHub (${this.currentEngine}) with workflow ${targetWorkflow}...`);
+            console.log(`[VideoProvider] Submitting to RunningHub (${this.currentEngine}) with workflow ${targetWorkflow} and nodes:`, JSON.stringify(nodeInfoList, null, 2));
             const taskId = await runWorkflow(targetWorkflow, nodeInfoList, this.config);
-            const resultUrl = await pollTask(taskId, this.config, 500000); // Poll with 500s timeout
+            const resultUrl = await pollTask(taskId, this.config, 600000);
 
             return resultUrl;
         });

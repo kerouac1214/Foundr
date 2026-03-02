@@ -1,4 +1,5 @@
 import Dexie, { Table } from 'dexie';
+import { proxyRunningHubUrl } from '../utils/urlUtils';
 
 export interface AssetRecord {
     id: string; // e.g., shotId_type or charId
@@ -8,13 +9,20 @@ export interface AssetRecord {
     timestamp: number;
 }
 
+export interface KeyValueRecord {
+    key: string;
+    value: any;
+}
+
 export class AssetDatabase extends Dexie {
     assets!: Table<AssetRecord>;
+    keyValue!: Table<KeyValueRecord>;
 
     constructor() {
         super('FoundrAssetDB');
-        this.version(1).stores({
-            assets: 'id, projectId, type, timestamp'
+        this.version(2).stores({
+            assets: 'id, projectId, type, timestamp',
+            keyValue: 'key'
         });
     }
 }
@@ -27,11 +35,7 @@ export const AssetDBService = {
         if (typeof data === 'string') {
             if (data.startsWith('data:') || data.startsWith('blob:') || data.startsWith('http') || data.startsWith('/')) {
                 try {
-                    let fetchUrl = data;
-                    // Improved Proxy Logic: Match both http/https and be case-insensitive if needed
-                    if (/rh-images-1252422369\.cos\.ap-beijing\.myqcloud\.com/i.test(data)) {
-                        fetchUrl = data.replace(/https?:\/\/rh-images-1252422369\.cos\.ap-beijing\.myqcloud\.com/i, '/rh-images');
-                    }
+                    let fetchUrl = proxyRunningHubUrl(data);
 
                     const resp = await fetch(fetchUrl);
                     if (!resp.ok) throw new Error(`Fetch failed with status ${resp.status}`);
@@ -83,5 +87,13 @@ export const AssetDBService = {
 
     async getAllProjectAssets(projectId: string) {
         return await db.assets.where('projectId').equals(projectId).toArray();
+    },
+
+    /**
+     * Generates a deterministic ID for an asset to allow recovery after refresh.
+     */
+    getDeterministicId(type: 'photo' | 'video' | 'candidate', shotId: string, index?: number) {
+        if (type === 'candidate') return `shot_${shotId}_cand_${index}`;
+        return `shot_${shotId}_${type}`;
     }
 };

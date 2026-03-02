@@ -19,7 +19,7 @@ export class VideoSynthesisService {
         this.loaded = true;
     }
 
-    async synthesize(storyboard: StoryboardItem[], onProgress?: (msg: string) => void): Promise<string> {
+    async synthesize(storyboard: StoryboardItem[], onProgress?: (msg: string) => void): Promise<Blob> {
         if (!this.loaded) await this.load();
         const ffmpeg = this.ffmpeg!;
 
@@ -43,8 +43,6 @@ export class VideoSynthesisService {
 
         // 3. Run concat command
         onProgress?.('正在拼接视频 (FFmpeg)...');
-        // Using concat demuxer if all videos have same encoding (Gemini/RunningHub usually output H.264)
-        // If they differ, we might need a more complex filter_complex
         await ffmpeg.exec([
             '-f', 'concat',
             '-safe', '0',
@@ -56,14 +54,14 @@ export class VideoSynthesisService {
         // 4. Read output
         onProgress?.('合成完成，正在导出...');
         const data = await ffmpeg.readFile('output.mp4');
-        const url = URL.createObjectURL(new Blob([(data as any).buffer], { type: 'video/mp4' }));
+        const blob = new Blob([(data as any).buffer], { type: 'video/mp4' });
 
         // Cleanup
         for (const name of inputFiles) await ffmpeg.deleteFile(name);
         await ffmpeg.deleteFile('concat_list.txt');
         await ffmpeg.deleteFile('output.mp4');
 
-        return url;
+        return blob;
     }
 }
 

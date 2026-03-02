@@ -8,8 +8,11 @@ import {
     SceneDNA,
     EnvironmentDNA,
     AspectRatio,
-    ImageEngine
+    ImageEngine,
+    BatchTask
 } from '../types';
+import { generateId } from '../utils';
+import { idbStorage } from '../utils/idbStorage';
 
 interface ProjectState {
     // Script
@@ -33,6 +36,8 @@ interface ProjectState {
     insertShotsBatch: (index: number, shots: StoryboardItem[]) => void;
     toggleSceneReferenceLock: (sceneId: string) => void;
     updateChapterContent: (chapterId: string, content: string) => void;
+    deleteShotImage: (shotId: string, url: string) => void;
+    setShotPreviewImage: (shotId: string, url: string, lock?: boolean) => void;
 
     // Chapter Selection
     selectedChapterId: string | null;
@@ -42,6 +47,13 @@ interface ProjectState {
     resetProject: () => void;
     addCharacter: (name: string) => string;
     addScene: (name: string) => string;
+
+    // Batch Queue
+    batchQueue: BatchTask[];
+    addToBatchQueue: (tasks: BatchTask[]) => void;
+    updateBatchTask: (id: string, type: 'photo' | 'video', updates: Partial<BatchTask>) => void;
+    removeFromBatchQueue: (id: string, type: 'photo' | 'video') => void;
+    clearBatchQueue: () => void;
 }
 
 const INITIAL_CONTEXT: GlobalContext = {
@@ -53,9 +65,15 @@ const INITIAL_CONTEXT: GlobalContext = {
     aspect_ratio: '9:16',
     script_engine: 'kimi',
     image_engine: 'nb2',
-    video_engine: 'google',
+    video_engine: 'wan2_2',
     characters: [],
-    scenes: []
+    scenes: [],
+    engine_configs: {
+        glm5: {
+            api_key: 'sk-af4be68bfa884fe29cdfc988b6eb656f',
+            enable_thinking: true
+        } as any
+    }
 };
 
 export const useProjectStore = create<ProjectState>()(
@@ -159,6 +177,30 @@ export const useProjectStore = create<ProjectState>()(
                 }));
             },
 
+            deleteShotImage: (shotId, url) => set((state) => ({
+                storyboard: state.storyboard.map((item) =>
+                    item.id === shotId
+                        ? {
+                            ...item,
+                            candidate_image_urls: item.candidate_image_urls?.filter((u) => u !== url),
+                            preview_url: item.preview_url === url ? (item.candidate_image_urls?.filter((u) => u !== url)[0] || '') : item.preview_url
+                        }
+                        : item
+                )
+            })),
+
+            setShotPreviewImage: (shotId, url, lock) => set((state) => ({
+                storyboard: state.storyboard.map((item) =>
+                    item.id === shotId
+                        ? {
+                            ...item,
+                            preview_url: url,
+                            isImageLocked: lock !== undefined ? lock : item.isImageLocked
+                        }
+                        : item
+                )
+            })),
+
             selectedChapterId: null,
             setSelectedChapterId: (id) => set({ selectedChapterId: id }),
 
@@ -167,7 +209,8 @@ export const useProjectStore = create<ProjectState>()(
                 globalContext: INITIAL_CONTEXT,
                 projectMetadata: null,
                 storyboard: [],
-                selectedChapterId: null
+                selectedChapterId: null,
+                batchQueue: []
             }),
 
             addCharacter: (name) => {
@@ -211,11 +254,33 @@ export const useProjectStore = create<ProjectState>()(
                     }
                 }));
                 return id;
-            }
+            },
+
+            batchQueue: [],
+            addToBatchQueue: (tasks) => set((state) => {
+                // Avoid duplicates: check if task with same ID and Type already exists
+                const newTasks = tasks.filter(nt =>
+                    !state.batchQueue.some(ot => ot.id === nt.id && ot.type === nt.type)
+                );
+                return { batchQueue: [...state.batchQueue, ...newTasks] };
+            }),
+            updateBatchTask: (id, type, updates) => set((state) => ({
+                batchQueue: state.batchQueue.map((t) =>
+                    (t.id === id && t.type === type) ? { ...t, ...updates } : t
+                )
+            })),
+            removeFromBatchQueue: (id, type) => set((state) => ({
+                batchQueue: state.batchQueue.filter((t) => !(t.id === id && t.type === type))
+            })),
+            clearBatchQueue: () => set({ batchQueue: [] }),
         }),
         {
             name: 'foundr-project-storage',
-            storage: createJSONStorage(() => localStorage),
+            storage: createJSONStorage(() => idbStorage),
+            partialize: (state) => {
+                const { batchQueue, ...rest } = state;
+                return rest;
+            }
         }
     )
 );

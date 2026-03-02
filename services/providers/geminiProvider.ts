@@ -1045,11 +1045,15 @@ ${scenesList}
         });
     }
 
-    async deriveNarrativeTrinity(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> {
+    async deriveNarrativeTrinity(anchorShot: StoryboardItem, script: string, context: GlobalContext, userPrompt?: string): Promise<StoryboardItem[]> {
         const ai = this.getClient();
         const stylePreset = context.visual_style_preset || "电影感";
         const charactersList = context.characters.map(c => `- ${c.name} (ID: ${c.char_id}): ${c.description || '无描述'}`).join('\n');
         const scenesList = context.scenes.map(s => `- ${s.name} (ID: ${s.scene_id}): ${s.description || '无描述'}`).join('\n');
+
+        const derivationInstruction = userPrompt
+            ? `## 【导演指令：最高优先级 - DIRECTOR'S DIRECTIVE】\n本轮推导必须严格遵循以下导演意图：\n> ${userPrompt}\n请根据该指令，结合上下文推导后续分镜。`
+            : `你是一位顶级分镜导演。基于给定的“核心分镜”，请推导出与其紧密关联的 **3 个连续分镜**。这 3 个分镜应构成一个完整的微型叙事弧（如：起因 -> 发展 -> 结果），其中核心分镜是该弧线的灵感来源。`;
 
         return await withRetry(async () => {
             const response = await ai.models.generateContent({
@@ -1062,7 +1066,7 @@ ${scenesList}
 ---
 
 ## 任务说明 (Task)
-你是一位顶级分镜导演。基于给定的“核心分镜”，请推导出与其紧密关联的 **3 个连续分镜**。这 3 个分镜应构成一个完整的微型叙事弧（如：起因 -> 发展 -> 结果），其中核心分镜是该弧线的灵感来源。
+${derivationInstruction}
 
 ## 视觉种子 (Seed Shot)
 - 画面描述: ${anchorShot.action_description}

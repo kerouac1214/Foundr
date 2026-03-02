@@ -29,9 +29,14 @@ export const deriveShotsFromAnchor = async (anchorShot: StoryboardItem, script: 
     return await provider.deriveShotsFromAnchor(anchorShot, script, context);
 };
 
-export const deriveNarrativeTrinity = async (anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> => {
+export const deriveNarrativeTrinity = async (
+    anchorShot: StoryboardItem,
+    script: string,
+    context: GlobalContext,
+    userPrompt?: string
+): Promise<StoryboardItem[]> => {
     const provider = getScriptProvider(context.script_engine);
-    return await provider.deriveNarrativeTrinity(anchorShot, script, context);
+    return await provider.deriveNarrativeTrinity(anchorShot, script, context, userPrompt);
 };
 
 export const generateNarrativeGrid = async (anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> => {

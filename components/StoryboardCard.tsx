@@ -15,9 +15,25 @@ interface StoryboardCardProps {
   onImageClick?: () => void;
   onRenderCandidates: () => Promise<void>;
   onDerive?: () => void;
+  onDeleteImage?: (url: string) => void;
+  onSetPreview?: (url: string, lock?: boolean) => void;
 }
 
-const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate, onRenderPhoto, onRenderCandidates, onRenderVideo, onDerive, mode = 'visual', layout = 'list', viewMode, onImageClick }) => {
+const StoryboardCard: React.FC<StoryboardCardProps> = ({
+  item,
+  context,
+  onUpdate,
+  onRenderPhoto,
+  onRenderCandidates,
+  onRenderVideo,
+  onDerive,
+  onDeleteImage,
+  onSetPreview,
+  mode = 'visual',
+  layout = 'list',
+  viewMode,
+  onImageClick
+}) => {
   const [isPromptExpanded, setIsPromptExpanded] = React.useState(false);
   const aspectRatioClass = context.aspect_ratio === '16:9' ? 'aspect-video' :
     context.aspect_ratio === '9:16' ? 'aspect-[9/16]' : 'aspect-[4/3]';
@@ -107,10 +123,49 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
 
           <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
             {item.render_status === 'rendering' && <div className="w-5 h-5 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />}
-            {item.isLocked && <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center"><svg className="w-3.5 h-3.5 text-black" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg></div>}
+            {item.isLocked && <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center" title="分镜已锁定"><svg className="w-3.5 h-3.5 text-black" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg></div>}
+            {item.isImageLocked && <div className="w-7 h-7 bg-[#D4AF37] rounded-lg flex items-center justify-center" title="图像预览已锁定"><svg className="w-3.5 h-3.5 text-black" fill="currentColor" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>}
 
             <div className="px-3 py-1 bg-black/60 rounded-full text-[9px] font-black tracking-tighter border border-white/10 backdrop-blur-sm text-white/50">#{item.shot_number}</div>
           </div>
+
+          {/* Image History Gallery Overlay (Bottom) */}
+          {item.candidate_image_urls && item.candidate_image_urls.length > 0 && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="absolute bottom-4 left-4 right-4 flex gap-1.5 overflow-x-auto p-2 bg-black/40 backdrop-blur-md rounded-2xl border border-white/10 z-20 scrollbar-none"
+            >
+              {item.candidate_image_urls.map((url, i) => (
+                <div key={i} className="relative group/thumb shrink-0">
+                  <button
+                    onClick={() => onSetPreview?.(url)}
+                    title="点击预览此版本"
+                    className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${item.preview_url === url ? 'border-[#D4AF37] scale-105 shadow-[0_0_10px_rgba(212,175,55,0.3)]' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                  >
+                    <img src={url} className="w-full h-full object-cover" alt="" />
+                  </button>
+
+                  {/* Thumb Actions */}
+                  <div className="absolute -top-1 -right-1 flex flex-col gap-1 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onDeleteImage?.(url)}
+                      className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-red-600 transition-colors"
+                      title="删除此版本"
+                    >
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <button
+                      onClick={() => onSetPreview?.(url, !item.isImageLocked)}
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shadow-lg transition-colors ${item.preview_url === url && item.isImageLocked ? 'bg-[#D4AF37] text-black' : 'bg-white/20 text-white hover:bg-white/40'}`}
+                      title={item.isImageLocked ? "解锁图像" : "锁定此图像作为预览"}
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -267,17 +322,8 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
                   </button>
                 )}
 
-                {(!viewMode || viewMode === 'videos_only') && (
+                {viewMode === 'videos_only' && (
                   <>
-                    <button
-                      onClick={onRenderPhoto}
-                      className="px-3 h-10 flex items-center justify-center gap-2 bg-white/5 hover:bg-white text-zinc-200 hover:text-black rounded-xl transition-all border border-white/10 text-[10px] font-bold uppercase tracking-wider"
-                      title="重新生成此镜头"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                      重新生成
-                    </button>
-
                     <select
                       value={item.video_engine || (item.lyric_line ? 'seedance_1_5' : (context.video_engine || 'wan2_2'))}
                       onChange={(e) => onUpdate({ video_engine: e.target.value as any })}
@@ -292,13 +338,15 @@ const StoryboardCard: React.FC<StoryboardCardProps> = ({ item, context, onUpdate
                     <button
                       disabled={item.video_status === 'generating'}
                       onClick={onRenderVideo}
-                      className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border ${item.video_status === 'generating' ? 'bg-[#D4AF37]/20 border-[#D4AF37]/40 animate-pulse' : 'bg-[#D4AF37]/10 hover:bg-[#D4AF37] border-[#D4AF37]/20 text-[#D4AF37] hover:text-black'}`}
-                      title="生成视频片段"
+                      className={`h-10 px-4 flex items-center justify-center gap-2 rounded-xl transition-all border font-black text-[10px] uppercase tracking-widest ${item.video_status === 'generating' ? 'bg-[#D4AF37]/20 border-[#D4AF37]/40 animate-pulse' : 'bg-[#D4AF37]/10 hover:bg-[#D4AF37] border-[#D4AF37]/20 text-[#D4AF37] hover:text-black shadow-lg shadow-[#D4AF37]/10'}`}
                     >
                       {item.video_status === 'generating' ? (
                         <div className="w-4 h-4 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
                       ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          生成视频 (Video)
+                        </>
                       )}
                     </button>
 

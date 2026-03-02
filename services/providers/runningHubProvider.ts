@@ -1,17 +1,16 @@
 import { AspectRatio } from "../../types";
 import { withRetry } from "../core";
 import { ImageProvider } from "./base";
-import { uploadFile, runWorkflow, pollTask } from "../runningHubService";
+import { uploadFile, runWorkflow, pollTask, runNBProImage } from "../runningHubService";
 import JSZip from "jszip";
 import { proxyRunningHubUrl } from "../../utils/urlUtils";
 
 export class RunningHubProvider implements ImageProvider {
-    // New NB2 Workflow: AI App 2027697385668874241
-    private workflowIdNB2 = "2027697385668874241";
+    private workflowIdNB2 = "2027444678353752065";
     private workflowIdQwen = "2007837815798763521";
     private workflowIdLegacy = "1967051468748546049";
     private config?: any;
-    private currentEngine: string = 'runninghub';
+    private currentEngine: string = 'nb2';
 
     updateConfig(config: any) {
         this.config = config;
@@ -27,6 +26,7 @@ export class RunningHubProvider implements ImageProvider {
         if (!resp.ok) throw new Error(`Failed to fetch image from ${url}`);
         return await resp.blob();
     }
+
 
     private async extractImageFromZipUrl(zipUrl: string): Promise<string> {
         const resp = await fetch(zipUrl);
@@ -66,65 +66,44 @@ export class RunningHubProvider implements ImageProvider {
                 }
             }
 
-            // Path 1: NB2 / z_image / runninghub logic
-            if (this.currentEngine === 'nb2' || this.currentEngine === 'runninghub' || this.currentEngine === 'z_image') {
-                let isCharacterJSON = false;
-                let cleanJsonPrompt = prompt;
-
-                try {
-                    let parsed = JSON.parse(prompt);
-                    if (parsed.Identity_Consistency_Protocol) isCharacterJSON = true;
-                } catch (e) {
-                    const jsonMatch = prompt.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        try {
-                            const parsed = JSON.parse(jsonMatch[0]);
-                            if (parsed.Identity_Consistency_Protocol) {
-                                isCharacterJSON = true;
-                                cleanJsonPrompt = jsonMatch[0];
-                            }
-                        } catch (innerE) { }
-                    }
-                }
-
-                // Default NB2/z_image logic: Use Workflow 2027697385668874241
-                console.log(`[NB2 Debug] Using Workflow ${this.workflowIdNB2} for engine: ${this.currentEngine}`);
+            // Path 1: NB2 (Latest Provided Workflow)
+            if (this.currentEngine === 'nb2') {
+                const WORKFLOW_ID = this.workflowIdNB2;
                 const nodeInfoList: any[] = [
-                    { nodeId: "4", fieldName: "text", fieldValue: isCharacterJSON ? cleanJsonPrompt : prompt },
-                    { nodeId: "9", fieldName: "aspectRatio", fieldValue: aspectRatio },
-                    { nodeId: "9", fieldName: "resolution", fieldValue: "1k" }
+                    { nodeId: "9", fieldName: "text", fieldValue: prompt || "" },
+                    { nodeId: "1", fieldName: "aspectRatio", fieldValue: aspectRatio },
+                    { nodeId: "1", fieldName: "resolution", fieldValue: "2k" }
                 ];
 
-                // Map Images to 1, 2, 3, 10
-                const imageNodes = ["1", "2", "3", "10"];
-                imageNodes.forEach((nodeId, index) => {
+                // Always send all 4 image nodes to clear previous values in the workflow
+                const imageNodeIds = ["2", "3", "4", "10"];
+                imageNodeIds.forEach((nodeId, index) => {
                     const value = uploadedUrls[index] || "";
                     nodeInfoList.push({
-                        nodeId: nodeId,
+                        nodeId,
                         fieldName: "image",
                         fieldValue: value
                     });
                 });
 
-                console.log("[NB2 Debug] nodeInfoList:", JSON.stringify(nodeInfoList, null, 2));
-
-                const taskId = await runWorkflow(this.workflowIdNB2, nodeInfoList, this.config);
+                console.log(`[NB2 Debug] Submitting Workflow ${WORKFLOW_ID} with nodes:`, JSON.stringify(nodeInfoList, null, 2));
+                const taskId = await runWorkflow(WORKFLOW_ID, nodeInfoList, this.config);
                 const resultUrl = await pollTask(taskId, this.config, 600000);
                 if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
                 return resultUrl;
             }
 
-            // Path 2: qwen2512 / runninghub
+            // Path 2: Qwen (runninghub) or Z-Image
+            const targetWorkflow = (this.currentEngine === 'z_image') ? this.workflowIdNB2 : this.workflowIdQwen;
+
             const [w, h] = this.aspectRatioToPixels(aspectRatio);
             const nodeInfoList = [
                 { nodeId: "5", fieldName: "text", fieldValue: prompt },
                 { nodeId: "7", fieldName: "width", fieldValue: w.toString() },
                 { nodeId: "7", fieldName: "height", fieldValue: h.toString() }
             ];
-            const taskId = await runWorkflow(this.workflowIdQwen, nodeInfoList, this.config);
-            const resultUrl = await pollTask(taskId, this.config);
-            if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
-            return resultUrl;
+            const taskId = await runWorkflow(targetWorkflow, nodeInfoList, this.config);
+            return await pollTask(taskId, this.config);
         });
     }
 }

@@ -23,7 +23,8 @@ const isRetryableError = (errorMsg: string) => {
         lower.includes("overloaded") ||
         lower.includes("quota") ||
         lower.includes("fetch") ||
-        lower.includes("deadline")
+        lower.includes("deadline") ||
+        lower.includes("timeout")
     );
 };
 

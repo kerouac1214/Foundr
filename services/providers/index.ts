@@ -1,6 +1,7 @@
 import { GeminiProvider } from "./geminiProvider";
 import { RunningHubProvider } from "./runningHubProvider";
 import { KimiProvider } from "./kimiProvider";
+import { Glm5Provider } from "./glm5Provider";
 import { ScriptProvider, ImageProvider, VideoProvider } from "./base";
 import { RunningHubVideoProvider } from "./runningHubVideoProvider";
 
@@ -8,15 +9,18 @@ export * from "./base";
 export * from "./geminiProvider";
 export * from "./runningHubProvider";
 export * from "./kimiProvider";
+export * from "./glm5Provider";
 export * from "./runningHubVideoProvider";
 
 const gemini = new GeminiProvider();
 const runningHub = new RunningHubProvider();
 const runningHubVideo = new RunningHubVideoProvider();
 const kimi = new KimiProvider();
+const glm5 = new Glm5Provider();
 
 export const getScriptProvider = (engine: string = 'google'): ScriptProvider => {
     if (engine === 'kimi' || engine === 'moonshot') return kimi;
+    if (engine === 'glm5') return glm5;
     return gemini;
 };
 
@@ -43,4 +47,5 @@ export const updateProviderConfigs = (configs: Record<string, any>) => {
         runningHubVideo.updateConfig(configs['runninghub']);
     }
     if (configs['kimi']) kimi.updateConfig(configs['kimi']);
+    if (configs['glm5']) glm5.updateConfig(configs['glm5']);
 };

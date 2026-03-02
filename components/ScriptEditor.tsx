@@ -3,6 +3,8 @@ import { useProjectStore } from '../store/useProjectStore';
 import { useUIStore } from '../store/useUIStore';
 import { EXAMPLE_SCRIPTS } from '../constants';
 
+import { parseFile } from '../services/fileParsingService';
+
 interface ScriptEditorProps {
     className?: string;
     script?: string;
@@ -33,29 +35,27 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ className, script: propScri
         }
     };
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        showToast(`正在读取文件: ${file.name}...`, 'info');
+        showToast(`正在解析文件: ${file.name}...`, 'info');
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const content = event.target?.result as string;
-            if (content) {
+        try {
+            const content = await parseFile(file);
+            if (content && content.trim()) {
                 handleScriptChange(content);
-                showToast(`剧本上传成功 (${content.length} 字符)`, 'success');
+                showToast(`剧本导入成功 (${content.length} 字符)`, 'success');
             } else {
-                showToast('文件内容为空', 'error');
+                showToast('文件内容为空或无法识别', 'info');
             }
+        } catch (error) {
+            console.error('File import error:', error);
+            showToast(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`, 'error');
+        } finally {
             // Reset input so the same file can be uploaded again
             if (fileInputRef.current) fileInputRef.current.value = '';
-        };
-        reader.onerror = () => {
-            showToast('无法读取文件，请检查权限', 'error');
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        };
-        reader.readAsText(file);
+        }
     };
 
     return (
@@ -83,10 +83,10 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ className, script: propScri
                     </select>
                     <input
                         type="file"
-                        title="上传文本剧本"
+                        title="上传剧本文件"
                         ref={fileInputRef}
                         onChange={handleFileUpload}
-                        accept=".txt,.md"
+                        accept=".txt,.md,.docx,.pdf,.xlsx,.xls,.csv"
                         className="hidden"
                     />
                     <button
@@ -112,8 +112,6 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ className, script: propScri
                 onPaste={e => {
                     const pastedText = e.clipboardData.getData('text');
                     console.log('Textarea onPaste triggered, length:', pastedText?.length || 0);
-                    // handleScriptChange will be called by native onChange, 
-                    // but we can force it here if needed for some environments.
                 }}
                 placeholder="在此输入剧本内容..."
                 className="w-full h-[520px] bg-black border border-white/10 rounded-[3rem] p-10 text-base outline-none resize-none serif leading-relaxed text-zinc-200 selection:bg-[#D4AF37]/30"

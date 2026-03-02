@@ -66,7 +66,7 @@ export interface Chapter {
   episode_ids: number[]; // References to Episode IDs within this chapter
 }
 export type AspectRatio = '16:9' | '9:16' | '4:3' | '1:1';
-export type AIEngine = 'google' | 'runninghub' | 'modelscope' | 'kimi' | 'nb2' | 'nb_pro' | 'qwen2512' | 'z_image' | 'wan2_2' | 'vidu_q2' | 'seedance_1_5';
+export type AIEngine = 'google' | 'runninghub' | 'modelscope' | 'kimi' | 'glm5' | 'nb2' | 'nb_pro' | 'qwen2512' | 'z_image' | 'wan2_2' | 'vidu_q2' | 'seedance_1_5';
 export type ImageEngine = AIEngine;
 
 export interface GlobalContext {
@@ -85,10 +85,20 @@ export interface GlobalContext {
     api_key?: string;
     model_name?: string;
     api_key_override?: string;
+    [key: string]: any;
   }>;
   characters: CharacterDNA[];
   scenes: SceneDNA[];
   environment?: EnvironmentDNA; // 保留用于兼容旧数据
+}
+
+export interface BatchTask {
+  id: string; // shotId
+  type: 'photo' | 'video';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error?: string;
+  retryCount: number;
+  addedTime: number;
 }
 
 export interface BatchProgress {
@@ -163,6 +173,7 @@ export interface StoryboardItem {
   video_engine?: AIEngine;
   video_status?: 'idle' | 'generating' | 'ready';
   isLocked?: boolean;
+  isImageLocked?: boolean;
   render_status?: 'idle' | 'rendering' | 'done';
   image_prompt?: string;
   video_prompt?: string;

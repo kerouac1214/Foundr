@@ -49,7 +49,8 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                         <div className="grid grid-cols-2 gap-1 p-1 bg-black/40 rounded-xl border border-white/5">
                             {[
                                 { label: 'Gemini', value: 'google' as const },
-                                { label: 'Kimi (Moonshot)', value: 'kimi' as const }
+                                { label: 'Kimi', value: 'kimi' as const },
+                                { label: 'GLM-5', value: 'glm5' as const }
                             ].map(engine => (
                                 <button
                                     key={engine.value}
@@ -63,20 +64,35 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                         <div className="mt-2 pl-1 group">
                             <details className="cursor-pointer">
                                 <summary className="text-[9px] text-zinc-600 hover:text-zinc-400 font-bold uppercase tracking-wider outline-none">
-                                    高级配置 ({globalContext.script_engine === 'kimi' ? 'Kimi' : 'Gemini'})
+                                    高级配置 ({globalContext.script_engine === 'kimi' ? 'Kimi' : globalContext.script_engine === 'glm5' ? 'GLM-5' : 'Gemini'})
                                 </summary>
                                 <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    {globalContext.script_engine === 'glm5' && (
+                                        <div className="flex items-center justify-between px-3 py-2 bg-black border border-white/5 rounded-lg">
+                                            <span className="text-[10px] text-zinc-400 font-bold">开启思维链 (CoT)</span>
+                                            <button
+                                                onClick={() => updateEngineConfig('glm5', 'enable_thinking', globalContext.engine_configs?.['glm5']?.enable_thinking === false ? true : false as any)}
+                                                className={`w-8 h-4 rounded-full transition-all relative ${globalContext.engine_configs?.['glm5']?.enable_thinking !== false ? 'bg-[#D4AF37]' : 'bg-zinc-700'}`}
+                                            >
+                                                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${globalContext.engine_configs?.['glm5']?.enable_thinking !== false ? 'left-4.5' : 'left-0.5'}`} />
+                                            </button>
+                                        </div>
+                                    )}
                                     <input
                                         type="password"
-                                        placeholder={globalContext.script_engine === 'kimi' ? "API Key" : "API Base URL (e.g. 代理地址)"}
+                                        placeholder={globalContext.script_engine === 'google' ? "API Base URL (e.g. 代理地址)" : "API Key"}
                                         value={
                                             globalContext.script_engine === 'kimi'
                                                 ? globalContext.engine_configs?.['kimi']?.api_key_override || ''
-                                                : globalContext.engine_configs?.['google']?.api_base || ''
+                                                : globalContext.script_engine === 'glm5'
+                                                    ? globalContext.engine_configs?.['glm5']?.api_key || ''
+                                                    : globalContext.engine_configs?.['google']?.api_base || ''
                                         }
                                         onChange={(e) => {
                                             if (globalContext.script_engine === 'kimi') {
                                                 updateEngineConfig('kimi', 'api_key_override', e.target.value);
+                                            } else if (globalContext.script_engine === 'glm5') {
+                                                updateEngineConfig('glm5', 'api_key', e.target.value);
                                             } else {
                                                 updateEngineConfig('google', 'api_base', e.target.value);
                                             }
@@ -135,6 +151,22 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                                 </details>
                             </div>
                         )}
+                    </div>
+                    {/* Video Engine */}
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">视频引擎 (视频生成)</label>
+                        <div className="grid grid-cols-3 gap-1 p-1 bg-black/40 rounded-xl border border-white/5">
+                            {VIDEO_ENGINES.map(engine => (
+                                <button
+                                    key={engine.value}
+                                    onClick={() => updateGlobalContext({ video_engine: engine.value as any })}
+                                    className={`px-2 py-2 rounded-lg transition-all text-[9.5px] font-bold uppercase ${globalContext.video_engine === engine.value ? 'bg-[#D4AF37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                                    title={engine.desc}
+                                >
+                                    {engine.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>

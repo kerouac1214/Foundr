@@ -1,4 +1,5 @@
 import { withRetry } from "./core";
+import { proxyRunningHubUrl } from "../utils/urlUtils";
 
 const PROXY_BASE_URL = process.env.VITE_API_BASE_URL || "https://rough-mode-92f3.kerouac1214.workers.dev";
 // Route through Vite proxy in dev to avoid CORS issues
@@ -58,31 +59,29 @@ export const uploadFile = async (
         blob = base64OrBlob;
     }
 
-    // For RunningHub upload
+    // For RunningHub upload: Using the latest /openapi/v2/media/upload/binary endpoint
     const formData = new FormData();
     formData.append('file', blob, filename);
-    formData.append('apiKey', apiKey);
 
     // Route through Vite proxy or custom base
-    const PRIMARY_UPLOAD_URL = `${apiBase}/task/openapi/upload`;
+    const UPLOAD_URL = `${apiBase}/openapi/v2/media/upload/binary`;
 
     try {
-        const resp = await fetch(PRIMARY_UPLOAD_URL, {
+        const resp = await fetch(UPLOAD_URL, {
             method: 'POST',
-            headers: { "Authorization": `Bearer ${apiKey}` }, // Header also required?
+            headers: {
+                "Authorization": `Bearer ${apiKey}`
+                // Note: Content-Type is set automatically for FormData
+            },
             body: formData
         });
 
         if (resp.ok) {
             const data = await resp.json();
-            // For task/openapi/upload, success format is often just { "code": 0, "data": { "fileName": "..." } } or similar
-            if (data.code === 0 && data.data && data.data.fileName) return data.data.fileName;
-            // Sometimes it returns path directly? 
-            // Previous debug showed: Upload Success: api/8c1...
-            // Let's check other fields
-            if (data.data && data.data.fileUrl) return data.data.fileUrl;
-            if (data.fileName) return data.fileName;
-
+            // Expected Response: { "code": 0, "message": "success", "data": { "download_url": "xxxx.png", ... } }
+            if (data.code === 0 && data.data) {
+                return data.data.download_url || data.data.fileName;
+            }
             console.log("Upload response data:", JSON.stringify(data));
         } else {
             console.warn(`Upload failed status: ${resp.status}`, await resp.text());
@@ -184,6 +183,7 @@ export const runWorkflow = async (workflowId: string, nodeInfoList: NodeInfo[], 
 
     for (const url of endpoints) {
         try {
+            console.log(`[RunningHub] Running Workflow at: ${url}`);
             const resp = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -193,16 +193,23 @@ export const runWorkflow = async (workflowId: string, nodeInfoList: NodeInfo[], 
                 body: JSON.stringify(body)
             });
 
-            if (resp.status === 404) continue; // Try next endpoint
+            if (resp.status === 404) {
+                console.warn(`[RunningHub] Endpoint not found: ${url}`);
+                continue;
+            }
 
             if (!resp.ok) {
                 const text = await resp.text();
+                console.error(`[RunningHub] Run Failed (${resp.status}):`, text);
                 throw new Error(`RunningHub Run Failed (${resp.status}): ${text}`);
             }
 
             const result = await resp.json();
-            if (!result.taskId) throw new Error(`No Task ID in response: ${JSON.stringify(result)}`);
-            return result.taskId;
+            console.log(`[RunningHub] Run Response:`, JSON.stringify(result));
+
+            const taskId = result.taskId || (result.data && result.data.taskId);
+            if (!taskId) throw new Error(`No Task ID in response: ${JSON.stringify(result)}`);
+            return taskId;
         } catch (e) {
             if (url === endpoints[endpoints.length - 1]) throw e;
         }
@@ -210,7 +217,7 @@ export const runWorkflow = async (workflowId: string, nodeInfoList: NodeInfo[], 
     throw new Error("Could not find valid run endpoint");
 };
 
-export const pollTask = async (taskId: string, config?: RunningHubConfig, timeoutMs: number = 240000) => {
+export const pollTask = async (taskId: string, config?: RunningHubConfig, timeoutMs: number = 600000) => {
     const apiBase = config?.api_base || DEFAULT_BASE_URL;
     const apiKey = config?.api_key || RUNNINGHUB_API_KEY;
 
@@ -233,35 +240,35 @@ export const pollTask = async (taskId: string, config?: RunningHubConfig, timeou
         });
 
         if (!resp.ok) {
-            console.warn(`Poll failed: ${resp.status}`);
+            console.warn(`[RunningHub] Poll attempt ${attempts} failed: ${resp.status}`);
+            attempts++;
             continue;
         }
 
         const result = await resp.json();
-        // User provided response format:
-        // { "taskId": "...", "status": "SUCCESS", "results": [ { "url": "...", ... } ], ... }
-
         const status = result.status;
+        console.log(`[RunningHub] Task ${taskId} status: ${status} (Attempt ${attempts})`);
 
         if (status === "SUCCESS") {
+            console.log(`[RunningHub] Task ${taskId} Success! Results:`, JSON.stringify(result.results));
             if (result.results && result.results.length > 0) {
-                // Find the first valid URL
                 const output = result.results.find((r: any) => r.url);
                 if (output) {
-                    if (output.url.includes('rh-images-1252422369.cos.ap-beijing.myqcloud.com')) {
-                        return output.url.replace('https://rh-images-1252422369.cos.ap-beijing.myqcloud.com', '/rh-images');
-                    }
-                    return output.url;
+                    const proxied = proxyRunningHubUrl(output.url);
+                    console.log(`[RunningHub] Returning proxied URL: ${proxied}`);
+                    return proxied;
                 }
             }
             throw new Error(`Task Succeeded but no results found: ${JSON.stringify(result)}`);
         } else if (status === "FAILED") {
-            throw new Error(`Task Failed: ${result.errorMessage || result.errorCode}`);
+            const errorMsg = result.errorMessage || result.errorCode || "Unknown RunningHub Error";
+            console.error(`[RunningHub] Task ${taskId} FAILED:`, JSON.stringify(result, null, 2));
+            throw new Error(`RunningHub Task Failed: ${errorMsg}`);
         }
 
-        // QUEUED or RUNNING
         attempts++;
     }
+    console.error(`[RunningHub] Task ${taskId} Timeout after ${attempts} attempts`);
     throw new Error("Task Timeout");
 };
 

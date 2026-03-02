@@ -14,9 +14,10 @@ interface StoryboardBoardProps {
     viewMode?: 'images_only' | 'videos_only';
     onInsertShot: (index: number, description: string) => Promise<void>;
     onDeriveShot: (item: StoryboardItem) => Promise<void>;
-    onDeriveThreeShots: (item: StoryboardItem) => Promise<void>;
+    onDeriveThreeShots: (item: StoryboardItem, userPrompt?: string) => Promise<void>;
     onGenerateNarrativeGrid: (item: StoryboardItem) => Promise<void>;
     onRefineShot: (item: StoryboardItem, prompt: string) => Promise<void>;
+    onRenderAll?: () => void;
 }
 
 /* --- Detail Modal --- */
@@ -34,6 +35,8 @@ const ShotDetailModal: React.FC<{
     onRefineShot: (prompt: string) => Promise<void>;
     allItems: StoryboardItem[];
     onNavigate: (item: StoryboardItem) => void;
+    onDeleteImage: (shotId: string, url: string) => void;
+    onSetPreview: (shotId: string, url: string, lock?: boolean) => void;
     viewMode?: 'images_only' | 'videos_only';
 }> = ({
     item,
@@ -48,6 +51,8 @@ const ShotDetailModal: React.FC<{
     onRefineShot,
     allItems,
     onNavigate,
+    onDeleteImage,
+    onSetPreview,
     viewMode
 }) => {
 
@@ -225,18 +230,37 @@ const ShotDetailModal: React.FC<{
                                     <span className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-1">选择最佳帧</span>
                                     <div className="grid grid-cols-2 gap-2 p-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl">
                                         {item.candidate_image_urls.map((url, i) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => onUpdate({ preview_url: url })}
-                                                className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${item.preview_url === url ? 'border-[#D4AF37]' : 'border-transparent opacity-60 hover:opacity-100'}`}
-                                            >
-                                                <img src={url} className="w-full h-full object-cover" alt="" />
-                                                {item.preview_url === url && (
-                                                    <div className="absolute inset-0 bg-[#D4AF37]/20 flex items-center justify-center">
-                                                        <svg className="w-4 h-4 text-[#D4AF37]" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                                    </div>
-                                                )}
-                                            </button>
+                                            <div key={i} className="relative group/thumb">
+                                                <button
+                                                    onClick={() => onSetPreview(item.id, url)}
+                                                    className={`relative w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${item.preview_url === url ? 'border-[#D4AF37]' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                                                >
+                                                    <img src={url} className="w-full h-full object-cover" alt="" />
+                                                    {item.preview_url === url && (
+                                                        <div className="absolute inset-0 bg-[#D4AF37]/20 flex items-center justify-center">
+                                                            <svg className="w-4 h-4 text-[#D4AF37]" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                        </div>
+                                                    )}
+                                                </button>
+
+                                                {/* Thumb Actions Overlay */}
+                                                <div className="absolute -top-1 -right-1 flex flex-col gap-1 opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onDeleteImage(item.id, url); }}
+                                                        className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-red-600 transition-colors"
+                                                        title="删除此版本"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onSetPreview(item.id, url, !item.isImageLocked); }}
+                                                        className={`w-5 h-5 rounded-full flex items-center justify-center shadow-lg transition-colors ${item.preview_url === url && item.isImageLocked ? 'bg-[#D4AF37] text-black' : 'bg-white/20 text-white hover:bg-white/40'}`}
+                                                        title={item.isImageLocked ? "解锁图像" : "锁定此图像作为预览"}
+                                                    >
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -472,6 +496,48 @@ const InsertShotModal: React.FC<{
     );
 };
 
+const TrinityPromptModal: React.FC<{
+    onClose: () => void;
+    onDerive: (prompt: string) => void;
+}> = ({ onClose, onDerive }) => {
+    const [prompt, setPrompt] = useState('');
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+            <div className="bg-[#121212] border border-white/10 p-8 rounded-3xl w-full max-w-xl shadow-2xl">
+                <h3 className="text-xl font-bold text-white mb-2">衍生叙事三连</h3>
+                <p className="text-zinc-500 text-sm mb-6">您可以输入对后续剧情的引导指令（可选），AI 将根据您的指令进行个性化衍生。</p>
+
+                <textarea
+                    autoFocus
+                    placeholder="例如：随后发生了一个大的反转 | 镜头转向角色的特写细节 | 增加一些悬疑氛围..."
+                    className="w-full h-32 bg-black/40 border border-white/10 rounded-2xl p-4 text-white text-sm focus:border-[#D4AF37] focus:ring-1 focus:ring-[#D4AF37] outline-none resize-none mb-6"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                />
+
+                <div className="flex justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm"
+                    >
+                        取消
+                    </button>
+                    <button
+                        onClick={() => {
+                            onDerive(prompt);
+                            onClose();
+                        }}
+                        className="px-8 py-2 bg-[#D4AF37] hover:bg-[#F0D060] text-black font-bold rounded-xl transition-all shadow-lg active:scale-95"
+                    >
+                        开始推导
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
     className,
     onRenderPhoto,
@@ -479,15 +545,18 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
     onRenderVideo,
     mode = 'visual',
     layout = 'list',
+    viewMode,
     onInsertShot,
     onDeriveShot,
     onDeriveThreeShots,
     onGenerateNarrativeGrid,
-    onRefineShot
+    onRefineShot,
+    onRenderAll
 }) => {
-    const { storyboard, globalContext, updateShot } = useProjectStore();
+    const { storyboard, globalContext, updateShot, deleteShotImage, setShotPreviewImage } = useProjectStore();
     const [selectedItem, setSelectedItem] = useState<StoryboardItem | null>(null);
     const [insertIdx, setInsertIdx] = useState<number | null>(null);
+    const [trinityAnchor, setTrinityAnchor] = useState<StoryboardItem | null>(null);
 
     // Function to handle rendering within modal context
     // We need to pass the index of the CURRENT selected shot
@@ -500,7 +569,7 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
     };
 
     const handleAdvancedTool = async (item: StoryboardItem, type: 'derive_trinity' | 'narrative_grid' | 'refine', payload?: string) => {
-        if (type === 'derive_trinity') await onDeriveThreeShots(item);
+        if (type === 'derive_trinity') setTrinityAnchor(item);
         if (type === 'narrative_grid') await onGenerateNarrativeGrid(item);
         if (type === 'refine' && payload) await onRefineShot(item, payload);
     };
@@ -514,6 +583,15 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                     <h2 className="text-2xl font-black italic serif uppercase">分镜脚本</h2>
                     <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.3em]">{storyboard.length} 个镜头</p>
                 </div>
+                {onRenderAll && storyboard.length > 0 && (
+                    <button
+                        onClick={onRenderAll}
+                        className="px-6 py-2 bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] rounded-full text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 shadow-lg shadow-[#D4AF37]/5"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        {viewMode === 'videos_only' ? '一键生成所有视频 (并发: 3)' : '一键生成所有分镜 (并发: 3)'}
+                    </button>
+                )}
             </div>
 
             {/* Board Container */}
@@ -538,12 +616,15 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                             context={globalContext}
                             mode={mode}
                             layout={layout}
+                            viewMode={viewMode}
                             onUpdate={(updates) => updateShot(item.id, updates)}
                             onRenderPhoto={() => onRenderPhoto(index)}
                             onRenderCandidates={() => onRenderCandidates(index)}
                             onRenderVideo={() => onRenderVideo(index)}
                             onImageClick={() => setSelectedItem(item)}
                             onDerive={() => onDeriveShot(item)}
+                            onDeleteImage={(url) => deleteShotImage(item.id, url)}
+                            onSetPreview={(url, lock) => setShotPreviewImage(item.id, url, lock)}
                         />
 
                         {/* Insertion Point AFTER each card */}
@@ -567,6 +648,14 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Trinity Prompt Modal */}
+            {trinityAnchor && (
+                <TrinityPromptModal
+                    onClose={() => setTrinityAnchor(null)}
+                    onDerive={(prompt) => onDeriveThreeShots(trinityAnchor, prompt)}
+                />
+            )}
 
             {/* Insertion Modal */}
             {insertIdx !== null && (
@@ -595,6 +684,8 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                     onRefineShot={(p) => handleAdvancedTool(selectedItem, 'refine', p)}
                     allItems={storyboard}
                     onNavigate={setSelectedItem}
+                    onDeleteImage={deleteShotImage}
+                    onSetPreview={setShotPreviewImage}
                     viewMode={viewMode}
                 />
             )}
