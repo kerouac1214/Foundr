@@ -3,6 +3,7 @@ import { withRetry } from "../core";
 import { ImageProvider } from "./base";
 import { uploadFile, runWorkflow, pollTask } from "../runningHubService";
 import JSZip from "jszip";
+import { proxyRunningHubUrl } from "../../utils/urlUtils";
 
 export class RunningHubProvider implements ImageProvider {
     // New NB2 Workflow: AI App 2027697385668874241
@@ -10,7 +11,7 @@ export class RunningHubProvider implements ImageProvider {
     private workflowIdQwen = "2007837815798763521";
     private workflowIdLegacy = "1967051468748546049";
     private config?: any;
-    private currentEngine: string = 'nb2';
+    private currentEngine: string = 'runninghub';
 
     updateConfig(config: any) {
         this.config = config;
@@ -21,10 +22,7 @@ export class RunningHubProvider implements ImageProvider {
     }
 
     private async urlToBlob(url: string): Promise<Blob> {
-        let fetchUrl = url;
-        if (url.includes('rh-images-1252422369.cos.ap-beijing.myqcloud.com')) {
-            fetchUrl = url.replace('https://rh-images-1252422369.cos.ap-beijing.myqcloud.com', '/rh-images');
-        }
+        let fetchUrl = proxyRunningHubUrl(url);
         const resp = await fetch(fetchUrl);
         if (!resp.ok) throw new Error(`Failed to fetch image from ${url}`);
         return await resp.blob();
@@ -100,7 +98,7 @@ export class RunningHubProvider implements ImageProvider {
                 // Map Images to 1, 2, 3, 10
                 const imageNodes = ["1", "2", "3", "10"];
                 imageNodes.forEach((nodeId, index) => {
-                    const value = uploadedUrls[index] || ""; // Explicitly clear if not provided
+                    const value = uploadedUrls[index] || "";
                     nodeInfoList.push({
                         nodeId: nodeId,
                         fieldName: "image",
@@ -111,12 +109,12 @@ export class RunningHubProvider implements ImageProvider {
                 console.log("[NB2 Debug] nodeInfoList:", JSON.stringify(nodeInfoList, null, 2));
 
                 const taskId = await runWorkflow(this.workflowIdNB2, nodeInfoList, this.config);
-                const resultUrl = await pollTask(taskId, this.config);
+                const resultUrl = await pollTask(taskId, this.config, 600000);
                 if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
                 return resultUrl;
             }
 
-            // Path 2: qwen2512
+            // Path 2: qwen2512 / runninghub
             const [w, h] = this.aspectRatioToPixels(aspectRatio);
             const nodeInfoList = [
                 { nodeId: "5", fieldName: "text", fieldValue: prompt },
@@ -124,7 +122,9 @@ export class RunningHubProvider implements ImageProvider {
                 { nodeId: "7", fieldName: "height", fieldValue: h.toString() }
             ];
             const taskId = await runWorkflow(this.workflowIdQwen, nodeInfoList, this.config);
-            return await pollTask(taskId, this.config);
+            const resultUrl = await pollTask(taskId, this.config);
+            if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
+            return resultUrl;
         });
     }
 }
