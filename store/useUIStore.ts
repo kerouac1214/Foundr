@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { BatchProgress } from '../types';
 
-type ViewType = 'context' | 'episodes' | 'storyboard' | 'foundry' | 'images' | 'video_fragments' | 'video_master';
+type ViewType = 'context' | 'episodes' | 'storyboard' | 'foundry' | 'images' | 'video_fragments' | 'ai_application' | 'video_master';
 
 interface UIState {
     activeView: ViewType;

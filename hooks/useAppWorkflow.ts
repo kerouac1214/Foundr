@@ -1094,45 +1094,19 @@ export const useAppWorkflow = () => {
 
     const handleInsertShot = async (index: number, description: string) => {
         if (!description.trim()) return;
+
+        // We use a brief loading state for the AI analysis
         setIsAnalyzing(true);
-        setStatusMessage('正在分析新分镜其关联资产...');
+        setStatusMessage('AI 导演正在分析新分镜...');
+
         try {
-            // 1. AI Analysis
+            // 1. AI Analysis of the description to get scene/shot properties
             const newShot = await analyzeShotInsertion(description, globalContext, storyboard);
 
             // 2. Insert into Store
             insertShotAt(index, newShot);
 
-            // 3. Auto-render the new shot
-            setStatusMessage('正在绘制新分镜...');
-
-            const scene = globalContext.scenes.find(s => s.scene_id === newShot.scene_id);
-            const prompt = await generateImagePrompt(newShot, globalContext.characters, scene, globalContext.environment, globalContext);
-
-            const url = await generateVisualPreview(
-                globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
-                applyStyleConstitution(prompt || newShot.image_prompt || newShot.action_description, globalContext),
-                newShot.seed,
-                (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
-            );
-
-            // Save to DB with deterministic ID
-            const photoId = AssetDBService.getDeterministicId('photo', newShot.id);
-            const dbUrl = await AssetDBService.saveAsset(
-                photoId,
-                projectMetadata?.id || 'default',
-                'image',
-                url
-            );
-
-            updateShot(newShot.id, {
-                preview_url: dbUrl,
-                render_status: 'done',
-                image_prompt: prompt,
-                candidate_image_urls: [dbUrl]
-            });
-
-            showToast('新分镜已插入并绘制完成', 'success');
+            showToast('新分镜已插入，您可以手动触发渲染', 'success');
         } catch (err: any) {
             console.error('Insert shot failed', err);
             showToast(`插入分镜失败: ${err.message}`, 'error');

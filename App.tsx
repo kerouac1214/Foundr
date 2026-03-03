@@ -20,7 +20,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import EpisodeDashboard from './components/EpisodeDashboard';
 import ChapterSidebar from './components/ChapterSidebar';
 import LoadingInsights from './components/LoadingInsights';
-import AIChatAssistant from './components/AIChatAssistant';
 
 const App: React.FC = () => {
   // Store State (Reactive with Selectors)
@@ -151,6 +150,7 @@ const App: React.FC = () => {
             <div className="w-[1px] h-4 bg-gray-700 mx-1"></div>
             <button onClick={() => setActiveView('images')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'images' ? 'bg-[#D4AF37] text-black shadow-md' : 'text-gray-400 hover:text-[#D4AF37]'}`}>画面预演</button>
             <button onClick={() => setActiveView('video_fragments')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'video_fragments' ? 'bg-[#D4AF37] text-black shadow-md' : 'text-gray-400 hover:text-[#D4AF37]'}`}>分镜视频</button>
+            <button onClick={() => setActiveView('ai_application')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'ai_application' ? 'bg-indigo-500 text-white shadow-md' : 'text-gray-400 hover:text-indigo-400'}`}>AI应用</button>
             <button onClick={() => setActiveView('video_master')} className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-all ${activeView === 'video_master' ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-emerald-500'}`}>最终母带</button>
           </nav>
 
@@ -298,6 +298,7 @@ const App: React.FC = () => {
                     onRenderCandidates={renderCandidates}
                     onRenderVideo={renderSingleVideo}
                     mode="text-only"
+                    layout="grid"
                     onInsertShot={handleInsertShot}
                     onDeriveShot={handleDeriveShots}
                     onDeriveThreeShots={handleDeriveThreeShots}
@@ -371,6 +372,18 @@ const App: React.FC = () => {
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {activeView === 'ai_application' && (
+                  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10 animate-pulse">
+                      <svg className="w-10 h-10 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.642.316a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h2 className="text-2xl font-black tracking-widest text-white uppercase italic">AI 应用 (AI Application)</h2>
+                      <p className="text-sm text-zinc-500 font-medium tracking-[0.2em]">模块开发中...</p>
+                    </div>
                   </div>
                 )}
 
@@ -454,7 +467,6 @@ const App: React.FC = () => {
             }}
           />
         )}
-        <AIChatAssistant />
       </div>
     </ErrorBoundary>
   );
