@@ -16,7 +16,7 @@ import { generateId } from "../../utils";
 export class KimiProvider implements ScriptProvider {
     private model = "kimi-latest";
     private apiBase = "https://api.moonshot.cn/v1";
-    private apiKey = process.env.KIMI_API_KEY || "sk-WFJSU8061nxUTfet2ZrFqtGjGejGOsnvERjbEybWvN3MxGfo";
+    private apiKey = process.env.KIMI_API_KEY || "";
 
     updateConfig(config: any) {
         if (config.api_base) this.apiBase = config.api_base;

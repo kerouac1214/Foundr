@@ -16,7 +16,7 @@ import { generateId } from "../../utils";
 export class Glm5Provider implements ScriptProvider {
     private model = "glm-5";
     private apiBase = "https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1";
-    private apiKey = "sk-af4be68bfa884fe29cdfc988b6eb656f";
+    private apiKey = process.env.GLM_API_KEY || "";
     private enableThinking = true;
 
     updateConfig(config: any) {
