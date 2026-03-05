@@ -132,7 +132,7 @@ export const useAppWorkflow = () => {
     const handleEpisodicStructuring = async (targetScript: string): Promise<{ status: ProjectStatus, episodes: Episode[] } | null> => {
         try {
             setError(null);
-            setStatusMessage('编剧分析：正在进行剧集统筹与智能分集...');
+            setStatusMessage('分镜规划：正在分析本集内容与其叙事结构...');
             setProgress(10);
 
             const result = await structureEpisodes(targetScript, globalContext.script_engine);
@@ -280,27 +280,28 @@ export const useAppWorkflow = () => {
             }
 
             console.log('[Storyboard] Step 3: Generating storyboard...');
-            const { metadata, initial_script } = await generateStoryboard(enrichedScript, characters, scenes, globalContext.script_engine);
-            console.log(`[Storyboard] Step 3 OK: ${initial_script.length} shots returned`);
+            const result = await generateStoryboard(enrichedScript, characters, scenes, globalContext.script_engine);
+            const metadata = result?.metadata || {};
+            const initial_script = Array.isArray(result?.initial_script) ? result.initial_script : [];
 
-            if (!initial_script || initial_script.length === 0) {
-                showToast('AI 未能生成分镜脚本，可能是剧本太短或格式不符。请检查剧本后重试。', 'error');
+            console.log(`[Storyboard] Step 3 Result: ${initial_script.length} shots returned`);
+
+            if (initial_script.length === 0) {
+                console.error('[Storyboard] Failed: No shots returned by AI');
+                showToast('AI 未能生成分镜脚本，可能是剧本太短、格式不符或当前 API 响应异常。请检查剧本或更换模型后重试。', 'error');
                 setIsAnalyzing(false);
                 return;
             }
 
             // Merge Episodic Data into Metadata
-            // CRITICAL: Spread existing projectMetadata first to preserve chapters, full_script, name, etc.
-            // Then let the AI-returned metadata only override bpm/energy/mood/transitions.
             const finalMetadata: ProjectMetadata = {
                 ...projectMetadata,   // Preserve chapters, full_script, analysis_mode, name, etc.
-                ...metadata,          // Let AI-returned fields (bpm, energy_level, overall_mood, transitions) override
+                ...metadata,          // Let AI-returned fields override
                 id: projectMetadata?.id || generateId(),
                 analysis_mode: projectMetadata?.analysis_mode || 'Single_Episode',
                 status: episodicData.status,
                 episodes: episodicData.episodes,
-                // Always restore chapters from existing metadata since AI doesn't return them
-                chapters: projectMetadata?.chapters,
+                chapters: projectMetadata?.chapters || [],
             };
 
             setProjectMetadata(finalMetadata);
@@ -379,10 +380,16 @@ export const useAppWorkflow = () => {
             setProgress(10);
 
             // Step 1 ONLY: Partition Chapters
-            const chapters = await partitionIntoChapters(freshScript, globalContext.script_engine);
+            console.log('[Full Analysis] Step 1: Partitioning Chapters...');
+            const result = await partitionIntoChapters(freshScript, globalContext.script_engine);
+            const chapters = Array.isArray(result) ? result : [];
 
-            if (!chapters || chapters.length === 0) {
-                showToast('章节切分失败：AI 未返回有效章节，请重试', 'error');
+            console.log('[Full Analysis] Step 1 Result:', chapters.length, 'chapters found');
+
+            if (chapters.length === 0) {
+                console.error('[Full Analysis] Failed: No chapters returned by AI');
+                showToast('章节切分失败：AI 未返回有效章节。可能是剧本太短，或当前模型 API 响应异常，请尝试更换模型。', 'error');
+                setIsAnalyzing(false);
                 return;
             }
 
@@ -395,7 +402,12 @@ export const useAppWorkflow = () => {
                 bpm: 120,
                 energy_level: 'Medium',
                 overall_mood: 'Neural',
-                chapters: chapters,
+                chapters: chapters.map(c => ({
+                    ...c,
+                    id: c.id || generateId(),
+                    title: c.title || '未命名章节',
+                    content: c.content || ''
+                })),
                 transitions: []
             };
 
@@ -421,24 +433,26 @@ export const useAppWorkflow = () => {
     const handleExtractAssets = async () => {
         if (!script) return;
         setIsAnalyzing(true);
-        setStatusMessage('正在扫描剧本资产...');
+        setStatusMessage('Step 2 / 资产提取：正在扫描全剧本提取角色与场景...');
         setProgress(5);
 
         try {
-            const { characters: charDrafts, scenes: sceneDrafts } = await extractAssets(script, globalContext, globalContext.script_engine);
+            const result = await extractAssets(script, globalContext, globalContext.script_engine);
+            const charDrafts = result?.characters || [];
+            const sceneDrafts = result?.scenes || [];
 
             // DEBUG: Log extraction results
-            console.log('[Extract] Characters:', charDrafts.map((c: any) => ({
-                name: c.name,
-                has_prompt: !!c.consistency_seed_prompt,
-                prompt_len: (c.consistency_seed_prompt || '').length,
-                prompt_preview: (c.consistency_seed_prompt || '').substring(0, 80)
+            console.log('[Extract] Characters:', (charDrafts || []).map((c: any) => ({
+                name: c?.name || 'Unknown',
+                has_prompt: !!c?.consistency_seed_prompt,
+                prompt_len: (c?.consistency_seed_prompt || '').length,
+                prompt_preview: (c?.consistency_seed_prompt || '').substring(0, 80)
             })));
-            console.log('[Extract] Scenes:', sceneDrafts.map((s: any) => ({
-                name: s.name,
-                has_prompt: !!s.visual_anchor_prompt,
-                prompt_len: (s.visual_anchor_prompt || '').length,
-                prompt_preview: (s.visual_anchor_prompt || '').substring(0, 80)
+            console.log('[Extract] Scenes:', (sceneDrafts || []).map((s: any) => ({
+                name: s?.name || 'Unknown',
+                has_prompt: !!s?.visual_anchor_prompt,
+                prompt_len: (s?.visual_anchor_prompt || '').length,
+                prompt_preview: (s?.visual_anchor_prompt || '').substring(0, 80)
             })));
 
             // Initialize store with all drafts immediately so they are visible with initial prompts
@@ -447,105 +461,38 @@ export const useAppWorkflow = () => {
                 scenes: sceneDrafts || []
             });
 
-            // 1. Forge Scenes & Auto-Render
-            const forgedScenes = [...(sceneDrafts || [])];
-            for (let i = 0; i < sceneDrafts.length; i++) {
-                if (i > 0) await new Promise(r => setTimeout(r, 2000));
-
-                const draft = sceneDrafts[i];
-                setStatusMessage(`正在设计场景: ${draft.name} (${i + 1}/${sceneDrafts.length})...`);
-                setProgress(10 + Math.floor((i / sceneDrafts.length) * 20));
-
+            // 1. Forge Scenes in Parallel
+            setStatusMessage(`正在并发设计 ${sceneDrafts.length} 个场景资产...`);
+            setProgress(15);
+            const scenePromises = (sceneDrafts || []).map(async (draft: any, i: number) => {
                 try {
                     const dna = await forgeSceneDNA(draft, globalContext);
-
-                    // Auto-render Scene
-                    setStatusMessage(`正在绘制场景: ${draft.name}...`);
-                    try {
-                        const url = await generateVisualPreview(
-                            globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
-                            applyStyleConstitution(`(Scene: ${dna.visual_anchor_prompt}), cinematic wide shot`, globalContext),
-                            dna.seed,
-                            '16:9',
-                            dna.reference_image_url ? [dna.reference_image_url] : undefined
-                        );
-                        // Save to IndexedDB (as Image)
-                        const dbUrl = await AssetDBService.saveAsset(
-                            `scene_${dna.scene_id}`,
-                            projectMetadata?.id || 'default',
-                            'image',
-                            url
-                        );
-                        dna.preview_url = dbUrl;
-                    } catch (e: any) {
-                        console.error(`Auto-render scene ${draft.name} failed`, e);
-                        showToast(`场景 ${draft.name} 自动绘制失败: ${e.message}`, 'error');
-                    }
-
-                    forgedScenes[i] = dna;
-                    updateGlobalContext({ scenes: [...forgedScenes] });
+                    console.log(`[Parallel Forge] Scene OK: ${draft.name}`);
+                    return dna;
                 } catch (err) {
                     console.error(`场景 ${draft.name} 生成失败`, err);
+                    return draft; // Fallback to draft
                 }
-            }
-
+            });
+            const forgedScenes = await Promise.all(scenePromises);
             updateGlobalContext({ scenes: forgedScenes });
+            setProgress(40);
 
-            // Initialize Environment from first scene for backward compatibility if needed
-            if (forgedScenes.length > 0 && (!globalContext.environment || !globalContext.environment.visual_anchor_prompt)) {
-                updateEnvironment({
-                    description: forgedScenes[0].description,
-                    visual_anchor_prompt: forgedScenes[0].visual_anchor_prompt,
-                    core_lighting: forgedScenes[0].core_lighting,
-                    key_elements: forgedScenes[0].key_elements,
-                    preview_url: forgedScenes[0].preview_url
-                });
-            }
-
-
-            // 2. Forge Characters & Auto-Render
-            const forgedChars = [...(charDrafts || [])];
-            for (let i = 0; i < charDrafts.length; i++) {
-                await new Promise(r => setTimeout(r, 2000));
-
-                const draft = charDrafts[i];
-                setStatusMessage(`正在锻造角色: ${draft.name} (${i + 1}/${charDrafts.length})...`);
-                setProgress(30 + Math.floor((i / charDrafts.length) * 60));
-
+            // 2. Forge Characters in Parallel
+            setStatusMessage(`正在并发锻造 ${charDrafts.length} 个角色资产...`);
+            const charPromises = (charDrafts || []).map(async (draft: any, i: number) => {
                 try {
                     const dna = await forgeCharacterDNA(draft, globalContext);
-
-                    // Auto-render Character
-                    setStatusMessage(`正在绘制角色: ${draft.name}...`);
-                    try {
-                        const url = await generateVisualPreview(
-                            globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
-                            dna.consistency_seed_prompt,
-                            dna.seed,
-                            '16:9',
-                            dna.reference_image_url ? [dna.reference_image_url] : undefined
-                        );
-                        // Save to IndexedDB (as Image)
-                        const dbUrl = await AssetDBService.saveAsset(
-                            `char_${dna.char_id}`,
-                            projectMetadata?.id || 'default',
-                            'image',
-                            url
-                        );
-                        dna.preview_url = dbUrl;
-                    } catch (e: any) {
-                        console.error(`Auto-render char ${draft.name} failed`, e);
-                        showToast(`角色 ${draft.name} 自动绘制失败: ${e.message}`, 'error');
-                    }
-
-                    forgedChars[i] = dna;
-                    // Update store incrementally so user sees progress
-                    updateGlobalContext({ characters: [...forgedChars] });
+                    console.log(`[Parallel Forge] Character OK: ${draft.name}`);
+                    return dna;
                 } catch (err: any) {
                     console.error(`角色 ${draft.name} DNA 生成失败:`, err);
-                    showToast(`角色 ${draft.name} 处理失败`, 'error');
+                    return draft; // Fallback to draft
                 }
-            }
+            });
+            const forgedChars = await Promise.all(charPromises);
+            updateGlobalContext({ characters: forgedChars });
+            setProgress(80);
 
             // === FALLBACK: Auto-build visual DNA for any asset missing prompts ===
             const finalScenes = forgedScenes.map((s: any) => {
@@ -1119,72 +1066,43 @@ export const useAppWorkflow = () => {
         setIsAnalyzing(true);
         setStatusMessage('AI 导演正在推导前后关联分镜...');
         try {
-            // 1. Derive Context (2 before, 2 after)
             const derivedShots = await deriveShotsFromAnchor(anchorShot, script, globalContext);
             if (!derivedShots || derivedShots.length === 0) {
                 throw new Error('AI 推导返回结果为空');
             }
 
-            // The AI returns [prev2, prev1, next1, next2]
-            const prevShots = derivedShots.slice(0, 2);
-            const nextShots = derivedShots.slice(2, 4);
-
             const anchorIndex = storyboard.findIndex(s => s.id === anchorShot.id);
             if (anchorIndex === -1) return;
 
-            // 2. Insert into Store
-            // We insert nextShots AFTER anchor, then prevShots BEFORE anchor
-            // To keep stability, let's do it in one batch if we update the helper
-            // Or just two calls. Let's use two calls to insertShotsBatch for clarity.
+            const prevShots = derivedShots.slice(0, 2);
+            const nextShots = derivedShots.slice(2, 4);
 
-            // Insert after (index + 1)
             insertShotsBatch(anchorIndex + 1, nextShots);
-            // Insert before (anchorIndex is same position, it will push anchor ahead)
             insertShotsBatch(anchorIndex, prevShots);
 
-            showToast('已推导并补充 4 个关联分镜，系统正在自动绘制...', 'success');
-
-            // 3. Batch Render derived shots
-            // We need the NEW ids to render
             const allNewShots = [...prevShots, ...nextShots];
 
-            for (const shot of allNewShots) {
-                setStatusMessage(`正在绘制推导分镜: #${shot.shot_number || '...'} `);
-                try {
-                    const scene = globalContext.scenes.find(s => s.scene_id === shot.scene_id);
-                    const prompt = await generateImagePrompt(shot, globalContext.characters, scene, globalContext.environment, globalContext);
+            // Add to Background Queue
+            const tasks: BatchTask[] = allNewShots.map(shot => ({
+                id: shot.id,
+                type: 'photo',
+                status: 'pending',
+                retryCount: 0,
+                addedTime: Date.now()
+            }));
+            addToBatchQueue(tasks);
 
-                    const url = await generateVisualPreview(
-                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
-                        applyStyleConstitution(prompt || shot.image_prompt || shot.action_description, globalContext),
-                        shot.seed,
-                        (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
-                    );
+            showToast('已推导并补充 4 个关联分镜，正在后台批量绘制...', 'success');
 
-                    const photoId = AssetDBService.getDeterministicId('photo', shot.id);
-                    const dbUrl = await AssetDBService.saveAsset(
-                        photoId,
-                        projectMetadata?.id || 'default',
-                        'image',
-                        url
-                    );
+            // Unlock UI immediately
+            setIsAnalyzing(false);
 
-                    updateShot(shot.id, {
-                        preview_url: dbUrl,
-                        render_status: 'done',
-                        image_prompt: prompt,
-                        candidate_image_urls: [dbUrl]
-                    });
-                } catch (renderErr) {
-                    console.error('Failed to render derived shot', renderErr);
-                }
-            }
+            // Start processing queue
+            processBatchQueue();
 
-            showToast('推导分镜全部绘制完成', 'success');
         } catch (err: any) {
             console.error('Derive shots failed', err);
             showToast(`分镜推导失败: ${err.message}`, 'error');
-        } finally {
             setIsAnalyzing(false);
         }
     };
@@ -1200,27 +1118,25 @@ export const useAppWorkflow = () => {
             if (anchorIndex === -1) return;
 
             insertShotsBatch(anchorIndex + 1, derivedShots);
-            showToast('已推导并补充 3 个关联分镜，系统正在自动绘制...', 'success');
 
-            for (const shot of derivedShots) {
-                setStatusMessage(`正在绘制推导分镜: #${shot.shot_number || '...'} `);
-                try {
-                    const scene = globalContext.scenes.find(s => s.scene_id === shot.scene_id);
-                    const prompt = shot.image_prompt || await generateImagePrompt(shot, globalContext.characters, scene, globalContext.environment, globalContext);
-                    const url = await generateVisualPreview(
-                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
-                        applyStyleConstitution(prompt, globalContext),
-                        shot.seed,
-                        (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
-                    );
-                    const photoId = AssetDBService.getDeterministicId('photo', shot.id);
-                    const dbUrl = await AssetDBService.saveAsset(photoId, projectMetadata?.id || 'default', 'image', url);
-                    updateShot(shot.id, { preview_url: dbUrl, render_status: 'done', image_prompt: prompt, candidate_image_urls: [dbUrl] });
-                } catch (e) { console.error(e); }
-            }
+            // Add to Background Queue
+            const tasks: BatchTask[] = derivedShots.map(shot => ({
+                id: shot.id,
+                type: 'photo',
+                status: 'pending',
+                retryCount: 0,
+                addedTime: Date.now()
+            }));
+            addToBatchQueue(tasks);
+
+            showToast('已推导并补充 3 个关联分镜，正在后台批量绘制...', 'success');
+
+            // Unlock UI
+            setIsAnalyzing(false);
+            processBatchQueue();
+
         } catch (err: any) {
             handleError(err);
-        } finally {
             setIsAnalyzing(false);
         }
     };
@@ -1237,28 +1153,14 @@ export const useAppWorkflow = () => {
 
             // Insert after anchor
             insertShotsBatch(anchorIndex + 1, gridShots);
-            showToast('九宫格剧情已生成，正在后台批量绘制...', 'success');
 
-            // Render sequentially
-            for (const shot of gridShots) {
-                setStatusMessage(`正在绘制九宫格分镜 ${shot.shot_number}/9...`);
-                try {
-                    const scene = globalContext.scenes.find(s => s.scene_id === shot.scene_id);
-                    const prompt = shot.image_prompt || await generateImagePrompt(shot, globalContext.characters, scene, globalContext.environment, globalContext);
-                    const url = await generateVisualPreview(
-                        globalContext.image_engine === 'qwen2512' ? 'nb2' : globalContext.image_engine,
-                        applyStyleConstitution(prompt, globalContext),
-                        shot.seed,
-                        (globalContext.image_engine === 'nb2' || globalContext.image_engine === 'runninghub') ? '9:16' : globalContext.aspect_ratio
-                    );
-                    const photoId = AssetDBService.getDeterministicId('photo', shot.id);
-                    const dbUrl = await AssetDBService.saveAsset(photoId, projectMetadata?.id || 'default', 'image', url);
-                    updateShot(shot.id, { preview_url: dbUrl, render_status: 'done', image_prompt: prompt, candidate_image_urls: [dbUrl] });
-                } catch (e) { console.error(e); }
-            }
+            showToast('九宫格剧情已生成', 'success');
+
+            // Unlock UI
+            setIsAnalyzing(false);
+
         } catch (err: any) {
             handleError(err);
-        } finally {
             setIsAnalyzing(false);
         }
     };

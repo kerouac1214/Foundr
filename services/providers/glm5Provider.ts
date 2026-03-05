@@ -15,9 +15,9 @@ import { generateId } from "../../utils";
 
 export class Glm5Provider implements ScriptProvider {
     private model = "glm-5";
-    private apiBase = "https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1";
+    private apiBase = "/glm/openapi/compatible-mode/v1";
     private apiKey = process.env.GLM_API_KEY || "";
-    private enableThinking = true;
+    private enableThinking = false;
 
     updateConfig(config: any) {
         if (config.api_base) this.apiBase = config.api_base;
@@ -26,7 +26,20 @@ export class Glm5Provider implements ScriptProvider {
         if (config.enable_thinking !== undefined) this.enableThinking = config.enable_thinking;
     }
 
+    async chat(messages: any[], jsonMode: boolean = false): Promise<string> {
+        const hasImage = messages.some(m =>
+            Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
+        );
+        if (hasImage) {
+            console.log(`[Glm5Provider] Image detected in chat, using model: ${this.model}`);
+        }
+        return await this.request(messages, jsonMode);
+    }
+
     private async request(messages: any[], jsonMode: boolean = false) {
+        // If we have no API key and are likely in a browser environment without a proxy,
+        // this call will fail. But CloudScriptProvider will normally intercept this 
+        // if its chat() method is used by the internal provider.
         const response = await fetch(`${this.apiBase}/chat/completions`, {
             method: 'POST',
             headers: {
@@ -44,8 +57,9 @@ export class Glm5Provider implements ScriptProvider {
         });
 
         if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`GLM-5 API Error: ${error}`);
+            const errorText = await response.text();
+            console.error(`[Glm5Provider] Request failed:`, errorText);
+            throw new Error(`GLM-5 API Error: ${errorText}`);
         }
 
         const data = await response.json();
@@ -62,7 +76,7 @@ export class Glm5Provider implements ScriptProvider {
 
     async structureEpisodes(script: string): Promise<{ status: ProjectStatus, episodes: Episode[] }> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位顶级的剧本统筹。请将剧本拆分为多个集数 (Episodes)。必须严格返回 JSON 格式。`
@@ -75,17 +89,22 @@ export class Glm5Provider implements ScriptProvider {
             const result = parseJSONRobust(content, { project_status: {}, episodes: [] });
             return {
                 status: {
-                    total_episodes: result.project_status?.total_episodes || 0,
-                    division_mode: result.project_status?.division_mode || 'Smart_120s_Cliffhanger'
+                    total_episodes: result.project_status?.total_episodes || result.项目状态?.总集数 || result.episodes?.length || 0,
+                    division_mode: (result.project_status?.division_mode || result.项目状态?.划分模式) || 'Smart_120s_Cliffhanger'
                 },
-                episodes: result.episodes || []
+                episodes: (result.episodes || result.集数 || []).map((e: any) => ({
+                    episode_number: e.episode_number || e.集数 || e.number || 0,
+                    estimated_duration: e.estimated_duration || e.预计时长 || "",
+                    boundaries: e.boundaries || e.边界 || { start_text_anchor: "", end_text_anchor: "" },
+                    narrative_structure: e.narrative_structure || e.叙事结构 || { opening_scene: "", core_conflict: "", ending_cliffhanger: "" }
+                }))
             };
         });
     }
 
     async partitionIntoChapters(script: string): Promise<Chapter[]> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位顶级的剧集架构师。请将剧本切分为多个章节 (Chapters)。
@@ -114,7 +133,7 @@ export class Glm5Provider implements ScriptProvider {
     async extractGlobalAssets(script: string, context: GlobalContext): Promise<{ characters: any[], scenes: any[] }> {
         const stylePreset = context.visual_style_preset || "电影感";
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 【最高优先级：全局风格宪法 - VISUAL STYLE CONSTITUTION】
@@ -127,44 +146,75 @@ export class Glm5Provider implements ScriptProvider {
 ## 【最高优先级语言规则 - MANDATORY LANGUAGE RULE】
 **你必须严格遵守以下指示，不可违反：**
 - 所有 \`name\` 和 \`description\` 字段内容**必须使用中文**。
-- \`name\` 字段必须简洁，仅包含资产名称，不得包含任何描述。
-- **所有 \`prompt\` 字段（\`consistency_seed_prompt\`, \`visual_anchor_prompt\`）必须输出为中文的提示词。**
+- \`name\` 字段必须简洁，仅包含资产名称。
+- **所有 \`prompt\` 字段（\`visual_anchor_prompt\`）必须输出为中文的提示词。**
 
 ---
 
 你是一位顶级的制片人与美术指导。你的任务是通读全剧本，提取核心的角色与场景资产。
 必须返回标准的 JSON 格式：
 {
-  "characters": [{ 
-    "char_id": "c1", 
-    "name": "姓名", 
-    "description": "外貌、性格及关键特征的中文详细描述",
-    "consistency_seed_prompt": "角色的详细中文提示词，专注物理身份与风格"
-  }],
   "scenes": [{ 
     "scene_id": "s1", 
     "name": "场景名", 
     "description": "环境、氛围的中文详细描述", 
     "core_lighting": "光影设定的中文描述",
     "visual_anchor_prompt": "场景的详细中文提示词，专注建筑、光影与氛围"
-  }]
+  }],
+  "characters": [
+    {
+      "Role_ID": "姓名_年龄阶段或版本 (如: Mark_Childhood)",
+      "Narrative_Weight": "Level 1 (Core) / Level 2 (Supporting)",
+      "Scene_Coverage": {
+        "Total_Scenes": 0,
+        "Scene_IDs": ["S01", "S02"]
+      },
+      "Core_Profile": {
+        "Name": "角色中文名",
+        "Age": "该阶段的具体年龄或年龄段 (如: 8岁)",
+        "Gender": "生理性别",
+        "Nationality_Ethnicity": "国籍或族裔背景",
+        "Personality": "该阶段的性格关键词描述",
+        "Occupation": "该阶段的职业或身份背景 (如: 小学生)",
+        "Timeline": "该阶段所处的时代坐标 (e.g., 1998)"
+      },
+      "Visual_Reference": {
+        "Outfit": "基于该阶段剧情的服装材质与款式详细描述",
+        "Physical_Traits": "该年龄段的核心骨骼/面部/身体特征描述 (中性表情视角)"
+      }
+    }
+  ]
 }
+
+### 角色提取附加规则（跨年龄/跨状态裂变提取）：
+如果角色在剧中跨越了不同年龄或状态，必须独立提取。如：“Mark_Childhood”、“Mark_MiddleAge”。
 
 请从以下长剧本中提取全局核心资产：\n\n${script}`
                 }
             ], true);
             const result = parseJSONRobust(content, { characters: [], scenes: [] });
 
-            const characters = (result.characters || result.角色 || result.Character_Assets || []).map((c: any) => {
-                const char_id = c.char_id || c.id || generateId();
+            const characters = (result.characters || result.角色 || result.Character_Analysis || []).map((c: any) => {
+                const char_id = c.Role_ID || c.char_id || c.id || generateId();
+                const name = c.Core_Profile?.Name || c.name || c.姓名 || "未知角色";
+
+                const age = c.Core_Profile?.Age || c.age || '';
+                const gender = c.Core_Profile?.Gender || c.gender || '';
+                const ethnicity = c.Core_Profile?.Nationality_Ethnicity || '';
+                const personality = c.Core_Profile?.Personality || c.personality || '';
+                const outfit = c.Visual_Reference?.Outfit || c.outfit || '';
+                const traits = c.Visual_Reference?.Physical_Traits || c.physical_traits || '';
+
+                const description = c.description || c.描述 || `${age} ${gender}，${ethnicity}。${personality}。身穿${outfit}。特征：${traits}`;
+
                 return {
                     id: char_id,
                     char_id: char_id,
-                    name: c.name || c.姓名 || "未知角色",
-                    description: c.description || c.描述 || "",
-                    consistency_seed_prompt: c.consistency_seed_prompt || c.提示词 || c.prompt || "",
-                    physical_core: c.physical_core || { gender_age: "", facial_features: "", hair_style: "", distinguishing_marks: "" },
-                    costume_id: c.costume_id || { top: "", bottom: "", accessories: "" },
+                    name: name,
+                    description: description,
+                    consistency_seed_prompt: "",
+                    physical_core: c.physical_core || { gender_age: age, facial_features: traits, hair_style: "", distinguishing_marks: "" },
+                    costume_id: c.costume_id || { top: outfit, bottom: "", accessories: "" },
                     seed: Math.floor(Math.random() * 1000000)
                 };
             });
@@ -176,7 +226,9 @@ export class Glm5Provider implements ScriptProvider {
                     scene_id: scene_id,
                     name: s.name || s.场景名 || "未知场景",
                     description: s.description || s.描述 || "",
-                    visual_anchor_prompt: s.visual_anchor_prompt || s.提示词 || s.prompt || "",
+                    visual_anchor_prompt: typeof (s.visual_anchor_prompt || s.提示词 || s.prompt) === 'object'
+                        ? JSON.stringify(s.visual_anchor_prompt || s.提示词 || s.prompt, null, 2)
+                        : (s.visual_anchor_prompt || s.提示词 || s.prompt || ""),
                     narrative_importance: s.narrative_importance || 'Transition',
                     relevant_scene_ids: s.relevant_scene_ids || [],
                     core_lighting: s.core_lighting || "",
@@ -193,12 +245,34 @@ export class Glm5Provider implements ScriptProvider {
         return this.extractGlobalAssets(script, context);
     }
 
+    private normalizeShotType(val: string): string {
+        if (!val) return "MS";
+        const v = val.toLowerCase();
+        if (v.includes("特写") || v.includes("cu") || v.includes("close up")) return "CU";
+        if (v.includes("中景") || v.includes("ms") || v.includes("medium")) return "MS";
+        if (v.includes("全景") || v.includes("ls") || v.includes("long shot") || v.includes("wide")) return "LS";
+        if (v.includes("主观") || v.includes("pov")) return "POV";
+        return val;
+    }
+
+    private normalizeCameraAngle(val: string): string {
+        if (!val) return "Cinematic Eye-level";
+        const v = val.toLowerCase();
+        if (v.includes("平视") || v.includes("eye") || v.includes("standard")) return "Cinematic Eye-level";
+        if (v.includes("低角度") || v.includes("仰拍") || v.includes("low")) return "Low Angle";
+        if (v.includes("高角度") || v.includes("俯拍") || v.includes("high")) return "High Angle";
+        if (v.includes("鸟瞰") || v.includes("bird")) return "Bird Eye View";
+        if (v.includes("极端低") || v.includes("extreme low")) return "Extreme Low Angle";
+        if (v.includes("荷兰") || v.includes("dutch")) return "Dutch Angle";
+        return val;
+    }
+
     async generateStoryboard(script: string, characters: any[], scenes: any[]): Promise<{ metadata: ProjectMetadata; initial_script: any[] }> {
         const charList = characters.map(c => `${c.name} (${c.id || c.char_id}): ${c.description || ''}`).join('\n');
         const sceneList = scenes.map(s => `${s.name} (${s.id || s.scene_id}): ${s.description || ''}`).join('\n');
 
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 【最高优先级语言规则 - MANDATORY LANGUAGE RULE】
@@ -281,9 +355,9 @@ export class Glm5Provider implements ScriptProvider {
 
                 return {
                     shot_number: s.shot_number || s.序号,
-                    shot_type: s.shot_type || s.description?.shot_type || s.镜头类型 || "Medium Shot",
-                    camera_angle: s.camera_angle || s.description?.camera_angle || s.拍摄角度 || "Eye Level",
-                    camera_movement: s.camera_movement || s.description?.camera_movement || s.镜头运动 || "Static",
+                    shot_type: this.normalizeShotType(s.shot_type || s.description?.shot_type || s.镜头类型 || s.景别 || "MS"),
+                    camera_angle: this.normalizeCameraAngle(s.camera_angle || s.description?.camera_angle || s.拍摄角度 || s.角度 || "Cinematic Eye-level"),
+                    camera_movement: s.camera_movement || s.description?.camera_movement || s.镜头运动 || s.运镜 || "Static",
                     lens_and_aperture: s.lens_and_aperture || s.description?.lens_and_aperture || s.光圈焦段 || "35mm f/2.8",
                     lighting_vibe: s.lighting_vibe || s.description?.lighting || s.光影氛围 || "Natural",
                     action_description: s.action_description || s.description?.content || s.description?.action || s.画面描述 || "",
@@ -314,7 +388,7 @@ export class Glm5Provider implements ScriptProvider {
 
     async forgeCharacterDNA(draft: any, context: GlobalContext): Promise<CharacterDNA> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位顶级角色设计师。请生成角色的视觉 DNA。必须返回 JSON，包含 consistency_seed_prompt (复杂的 JSON 描述对象) 和 description (简短中文摘要)。`
@@ -361,7 +435,7 @@ export class Glm5Provider implements ScriptProvider {
 
     async forgeSceneDNA(draft: any, context: GlobalContext): Promise<SceneDNA> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位顶级美术指导。请生成场景的视觉 DNA。必须返回 JSON，包含 visual_anchor_prompt (复杂的 JSON 描述对象) 和 description (简短中文摘要)。`
@@ -406,7 +480,7 @@ export class Glm5Provider implements ScriptProvider {
             const systemPrompt = type === 'character'
                 ? "你是一位顶级角色设计师。请根据已有的角色信息，编写一段极致详尽的、用于 AI 生图的中文视觉描述。"
                 : "你是一位顶级美术指导。请根据已有的场景信息，编写一段极致详尽的、用于 AI 生图的中文视觉描述。";
-            const content = await this.request([
+            const content = await this.chat([
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `资产：${name}\n描述：${description}` }
             ]);
@@ -417,7 +491,7 @@ export class Glm5Provider implements ScriptProvider {
     async generateImagePrompt(item: StoryboardItem, characters: any[], scene: any | undefined, _env: any | undefined, context: GlobalContext): Promise<string> {
         const charNames = characters.map(c => c.name).join(', ');
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位高级电影摄影师。请编写一段具有电影感的中文生图提示词。必须包含指定的景别 (${item.shot_type}) 和拍摄角度 (${item.camera_angle})。`
@@ -433,7 +507,7 @@ export class Glm5Provider implements ScriptProvider {
 
     async analyzeShotInsertion(description: string, context: GlobalContext, _surroundingShots: StoryboardItem[]): Promise<StoryboardItem> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位电影导演。请根据描述生成一个分镜项 JSON。使用可用资产：\n角色：${context.characters.map(c => c.name).join(', ')}\n场景：${context.scenes.map(s => s.name).join(', ')}`
@@ -466,7 +540,7 @@ export class Glm5Provider implements ScriptProvider {
 
     async deriveShotsFromAnchor(anchorShot: StoryboardItem, script: string, context: GlobalContext): Promise<StoryboardItem[]> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位导演。基于核心分镜，推演前后各 2 个关键瞬间。返回 JSON 数组，包含 4 个分镜项。`

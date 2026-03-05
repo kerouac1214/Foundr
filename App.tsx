@@ -34,6 +34,8 @@ const App: React.FC = () => {
   const selectedChapterId = useProjectStore(s => s.selectedChapterId);
   const setSelectedChapterId = useProjectStore(s => s.setSelectedChapterId);
   const updateChapterContent = useProjectStore(s => s.updateChapterContent);
+  const setProjectMetadata = useProjectStore(s => s.setProjectMetadata);
+  const saveToCloud = useProjectStore(s => s.saveToCloud);
 
   // UI Store State (Individual Selectors for Stability)
   const activeView = useUIStore(s => s.activeView);
@@ -138,8 +140,11 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="w-8 h-8 bg-director-accent rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">F</div>
             <div className="hidden sm:block">
-              <h1 className="text-xs font-black tracking-widest uppercase text-white">Foundry</h1>
-              <span className="text-[10px] text-gray-500 font-medium">Director Pro</span>
+              <h1 className="text-xs font-black tracking-widest uppercase text-white">造视 Foundry</h1>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-gray-500 font-medium">以 AI 为火，匠心铸造视觉之美</span>
+                <span className="text-[8px] text-zinc-600 font-medium tracking-tight">Made by Kerouac</span>
+              </div>
             </div>
           </div>
 
@@ -156,8 +161,20 @@ const App: React.FC = () => {
           </nav>
 
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowProjectList(true)} className="p-2 text-gray-400 hover:text-white transition-colors" title="项目列表">
+            <button
+              onClick={() => setShowProjectList(true)}
+              className="p-2 text-gray-400 hover:text-[#D4AF37] transition-colors"
+              title="云端项目列表"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+            </button>
+            <button
+              onClick={saveToCloud}
+              className="px-3 py-1 bg-[#D4AF37]/10 border border-[#D4AF37]/20 rounded-lg flex items-center gap-2 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black transition-all"
+              title="同步当前剧本到云端"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+              <span className="text-[9px] font-bold uppercase tracking-widest">保存云端</span>
             </button>
             <button onClick={resetProject} className="text-[10px] font-bold text-gray-500 hover:text-red-400 px-3 py-1.5 transition-colors">重置</button>
             {(activeView === 'context' || activeView === 'episodes') && (
@@ -207,12 +224,40 @@ const App: React.FC = () => {
         </header>
 
         <main className="flex-1 overflow-hidden relative flex flex-col">
-          {error && (
-            <div className="m-6 bg-red-500/10 border border-red-500/20 p-4 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-              <span className="text-xs text-red-400">{humanizeError(error).message}</span>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-white">✕</button>
-            </div>
-          )}
+          {error && (() => {
+            const hErr = humanizeError(error);
+            return (
+              <div className="m-6 bg-red-500/10 border border-red-500/20 p-6 rounded-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 shadow-2xl shadow-red-500/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-sm font-bold text-red-400">{hErr.message}</span>
+                  </div>
+                  <button onClick={() => setError(null)} title="关闭错误提示" className="text-zinc-600 hover:text-white transition-colors p-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                {hErr.suggestion && (
+                  <p className="text-[11px] text-zinc-400 leading-relaxed pl-3.5 border-l border-red-500/30 font-medium">
+                    💡 {hErr.suggestion}
+                  </p>
+                )}
+                {hErr.original && (
+                  <div className="mt-1 pl-3.5">
+                    <details className="outline-none group">
+                      <summary className="text-[9px] text-zinc-600 hover:text-zinc-500 cursor-pointer uppercase tracking-widest font-bold list-none flex items-center gap-1 transition-colors">
+                        <svg className="w-2.5 h-2.5 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                        详细错误信息 (Raw Error)
+                      </summary>
+                      <pre className="mt-2 p-3 bg-black/60 rounded-lg text-[10px] text-red-300/60 font-mono overflow-x-auto border border-white/5 whitespace-pre-wrap break-all">
+                        {hErr.original}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="flex-1 flex overflow-hidden">
             {/* Chapter Sidebar (If in Storyboard mode) */}
@@ -436,24 +481,8 @@ const App: React.FC = () => {
         {/* Onboarding */}
         {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
 
-        {/* Project List */}
         {showProjectList && (
           <ProjectList
-            currentState={{
-              project: { metadata: projectMetadata!, storyboard },
-              global_context: globalContext,
-            } as any}
-            onLoadProject={(loadedState) => {
-              if (loadedState.project) {
-                useProjectStore.getState().setProjectMetadata(loadedState.project.metadata);
-                useProjectStore.getState().setStoryboard(loadedState.project.storyboard);
-              }
-              if (loadedState.global_context) {
-                useProjectStore.getState().updateGlobalContext(loadedState.global_context);
-              }
-              setShowProjectList(false);
-              useUIStore.getState().showToast('项目已加载', 'success');
-            }}
             onClose={() => setShowProjectList(false)}
           />
         )}

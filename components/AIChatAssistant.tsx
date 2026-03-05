@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChatStore, ChatMessage } from '../store/useChatStore';
-import { KimiProvider } from '../services/providers/kimiProvider';
+import { getScriptProvider } from '../services/providers';
 import { useProjectStore } from '../store/useProjectStore';
 
 const AIChatAssistant: React.FC = () => {
@@ -22,17 +22,22 @@ const AIChatAssistant: React.FC = () => {
     const handleSend = async () => {
         if (!input.trim() && !attachedImage) return;
 
-        const userContent: any[] = [{ type: 'text', text: input }];
-        if (attachedImage) {
+        const currentInput = input.trim();
+        const currentImage = attachedImage;
+        const currentMessages = [...messages];
+
+        const userContent: any[] = [];
+        if (currentInput) userContent.push({ type: 'text', text: currentInput });
+        if (currentImage) {
             userContent.push({
                 type: 'image_url',
-                image_url: { url: attachedImage }
+                image_url: { url: currentImage }
             });
         }
 
         const userMsg: Omit<ChatMessage, 'timestamp'> = {
             role: 'user',
-            content: input + (attachedImage ? ' [图片已上传]' : '')
+            content: userContent
         };
 
         addMessage(userMsg);
@@ -41,8 +46,14 @@ const AIChatAssistant: React.FC = () => {
         setTyping(true);
 
         try {
-            const kimi = new KimiProvider();
-            kimi.updateConfig(globalContext.engine_configs?.kimi || {});
+            const engine = 'kimi';
+            const provider = getScriptProvider(engine);
+
+            // Sync config
+            const engineConfigs = globalContext.engine_configs || {};
+            if (engineConfigs[engine]) {
+                provider.updateConfig(engineConfigs[engine]);
+            }
 
             const fullMessages = [
                 {
@@ -56,25 +67,57 @@ const AIChatAssistant: React.FC = () => {
 
 请以专业、干练、富有创意的语气回答。`
                 },
-                ...messages.map(m => ({ role: m.role, content: m.content })),
+                ...currentMessages.map(m => ({ role: m.role, content: m.content })),
                 { role: 'user', content: userContent }
             ];
 
-            const response = await kimi.chat(fullMessages);
+            const response = await provider.chat(fullMessages);
             addMessage({ role: 'assistant', content: response });
-        } catch (error) {
-            addMessage({ role: 'assistant', content: '抱歉，我现在遇到了一点技术问题，请稍后再试。' });
+        } catch (error: any) {
+            console.error('Chat Assistant Error:', error);
+            const errorMsg = error.message?.includes('API Key')
+                ? `配置错误：AI 助手当前使用的引擎 (Kimi) 尚未设置有效 API Key。请在设置中检查配置。`
+                : '抱歉，我现在遇到了一点技术问题，请稍后再试。';
+            addMessage({ role: 'assistant', content: errorMsg });
         } finally {
             setTyping(false);
         }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const compressImage = (dataUrl: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const max = 1024;
+                if (width > max || height > max) {
+                    if (width > height) {
+                        height = (height / width) * max;
+                        width = max;
+                    } else {
+                        width = (width / height) * max;
+                        height = max;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = dataUrl;
+        });
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setAttachedImage(reader.result as string);
+            reader.onloadend = async () => {
+                const compressed = await compressImage(reader.result as string);
+                setAttachedImage(compressed);
             };
             reader.readAsDataURL(file);
         }
@@ -109,7 +152,9 @@ const AIChatAssistant: React.FC = () => {
                         <h4 className="text-sm font-bold text-white">Foundr AI 助手</h4>
                         <div className="flex items-center gap-1.5">
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">Kimi 2.5 Active</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
+                                {globalContext.script_engine?.toUpperCase() || 'AI'} ACTIVE
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -126,7 +171,19 @@ const AIChatAssistant: React.FC = () => {
                             ? 'bg-[#D4AF37] text-black font-medium'
                             : 'bg-white/5 text-zinc-300 border border-white/5'
                             }`}>
-                            {msg.content as string}
+                            {Array.isArray(msg.content) ? (
+                                <div className="space-y-3">
+                                    {msg.content.map((item: any, idx: number) => (
+                                        item.type === 'text' ? (
+                                            <p key={idx}>{item.text}</p>
+                                        ) : item.type === 'image_url' ? (
+                                            <img key={idx} src={item.image_url.url} alt="Uploaded" className="max-w-full rounded-lg border border-black/10 shadow-sm" />
+                                        ) : null
+                                    ))}
+                                </div>
+                            ) : (
+                                msg.content
+                            )}
                         </div>
                     </div>
                 ))}

@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { generateId } from '../utils';
 import { idbStorage } from '../utils/idbStorage';
+// import { lafProjectService } from '../services/lafProjectService';
 
 interface ProjectState {
     // Script
@@ -56,6 +57,14 @@ interface ProjectState {
     updateBatchTask: (id: string, type: 'photo' | 'video', updates: Partial<BatchTask>) => void;
     removeFromBatchQueue: (id: string, type: 'photo' | 'video') => void;
     clearBatchQueue: () => void;
+
+    // Cloud Sync
+    cloudProjects: { _id: string, projectMetadata: ProjectMetadata }[];
+    isSyncing: boolean;
+    fetchCloudProjects: () => Promise<void>;
+    saveToCloud: () => Promise<void>;
+    loadCloudProject: (id: string) => Promise<void>;
+    deleteCloudProject: (id: string) => Promise<void>;
 }
 
 const INITIAL_CONTEXT: GlobalContext = {
@@ -65,14 +74,13 @@ const INITIAL_CONTEXT: GlobalContext = {
     visual_style_subcategory_name: '默认',
     core_colors: "Natural lighting, Realistic skin",
     aspect_ratio: '9:16',
-    script_engine: 'kimi',
+    script_engine: 'glm5',
     image_engine: 'nb2',
     video_engine: 'wan2_2',
     characters: [],
     scenes: [],
     engine_configs: {
         glm5: {
-            api_key: 'sk-af4be68bfa884fe29cdfc988b6eb656f',
             enable_thinking: true
         } as any
     }
@@ -289,6 +297,30 @@ export const useProjectStore = create<ProjectState>()(
                 batchQueue: state.batchQueue.filter((t) => !(t.id === id && t.type === type))
             })),
             clearBatchQueue: () => set({ batchQueue: [] }),
+
+            // Cloud Actions
+            cloudProjects: [],
+            isSyncing: false,
+
+            fetchCloudProjects: async () => {
+                // Cloud Sync Disabled (Rollback to local only)
+                set({ cloudProjects: [] });
+            },
+
+            saveToCloud: async () => {
+                // Cloud Sync Disabled (Rollback to local only)
+                console.log('Cloud sync disabled, saving locally via persist middleware');
+            },
+
+            loadCloudProject: async (id) => {
+                // Cloud Sync Disabled
+                console.warn('Load cloud project disabled');
+            },
+
+            deleteCloudProject: async (id) => {
+                // Cloud Sync Disabled
+                console.warn('Delete cloud project disabled');
+            },
         }),
         {
             name: 'foundr-project-storage',

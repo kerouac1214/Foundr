@@ -9,8 +9,8 @@ export default defineConfig(({ mode }) => {
       port: 3001,
       host: '0.0.0.0',
       headers: {
-        'Cross-Origin-Embedder-Policy': 'require-corp',
-        'Cross-Origin-Opener-Policy': 'same-origin',
+        // 'Cross-Origin-Embedder-Policy': 'require-corp',
+        // 'Cross-Origin-Opener-Policy': 'same-origin',
       },
       proxy: {
         '/google': {
@@ -27,6 +27,16 @@ export default defineConfig(({ mode }) => {
           target: 'https://rh-images-1252422369.cos.ap-beijing.myqcloud.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/rh-images/, '')
+        },
+        '/moonshot': {
+          target: 'https://api.moonshot.cn',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/moonshot/, '')
+        },
+        '/glm': {
+          target: 'https://maas-api.ai-yuanjing.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/glm/, '')
         }
       }
     },
@@ -35,8 +45,28 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.RUNNINGHUB_API_KEY': JSON.stringify(env.RUNNINGHUB_API_KEY),
+      'process.env.KIMI_API_KEY': JSON.stringify(env.KIMI_API_KEY),
+      'process.env.GLM_API_KEY': JSON.stringify(env.GLM_API_KEY),
       'process.env.GEMINI_BASE_URL': JSON.stringify(env.GEMINI_BASE_URL || ''),
-      'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL || '')
+      'process.env.VITE_API_BASE_URL': JSON.stringify(env.VITE_API_BASE_URL || ''),
+      'process.env.LAF_APP_ID': JSON.stringify(env.LAF_APP_ID || '')
+    },
+    build: {
+      sourcemap: false, // Prevents source code from being viewable in browser dev tools
+      minify: 'esbuild', // Faster and default minification
+      cssMinify: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor': ['react', 'react-dom', 'zustand', 'dexie'],
+            'ai-providers': [
+              './services/providers/geminiProvider.ts',
+              './services/providers/kimiProvider.ts',
+              './services/providers/glm5Provider.ts'
+            ]
+          }
+        }
+      }
     },
     resolve: {
       alias: {

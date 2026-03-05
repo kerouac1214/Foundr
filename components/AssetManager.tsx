@@ -36,6 +36,11 @@ const PromptEditor: React.FC<{
     const [editPrompt, setEditPrompt] = useState(defaultPrompt);
     const [expanded, setExpanded] = useState(false);
 
+    // Sync state when defaultPrompt changes (e.g. after refinement)
+    useEffect(() => {
+        setEditPrompt(defaultPrompt);
+    }, [defaultPrompt]);
+
     return (
         <div className="pt-4 border-t border-white/5">
             <div className="flex items-center justify-between mb-2">
@@ -159,9 +164,12 @@ const DetailModal: React.FC<{
             return () => { document.body.style.overflow = 'unset'; };
         }, []);
 
+        const dnaPrompt = type === 'character' ? asset.consistency_seed_prompt : asset.visual_anchor_prompt;
+        const displayPrompt = typeof dnaPrompt === 'object' ? JSON.stringify(dnaPrompt, null, 2) : (dnaPrompt || '');
+
         const defaultPrompt = type === 'character'
-            ? asset.consistency_seed_prompt
-            : `${asset.visual_anchor_prompt}, cinematic wide shot, masterpiece`;
+            ? displayPrompt
+            : `${displayPrompt}, cinematic wide shot, masterpiece`;
 
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 md:p-12 animate-in fade-in duration-200">
@@ -237,7 +245,7 @@ const DetailModal: React.FC<{
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">视觉 DNA (提示词)</label>
                             <textarea
-                                value={type === 'character' ? asset.consistency_seed_prompt : asset.visual_anchor_prompt}
+                                value={displayPrompt}
                                 title="Visual DNA Prompt"
                                 onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
                                 className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-40 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"

@@ -14,53 +14,67 @@ import { ScriptProvider } from "./base";
 import { generateId } from "../../utils";
 
 export class KimiProvider implements ScriptProvider {
-    private model = "kimi-latest";
-    private apiBase = "https://api.moonshot.cn/v1";
-    private apiKey = process.env.KIMI_API_KEY || "";
+    private model = "moonshot-v1-8k";
+    private apiBase = "/moonshot/v1";
+    private apiKey = (process.env.KIMI_API_KEY || "").trim();
 
     updateConfig(config: any) {
         if (config.api_base) this.apiBase = config.api_base;
-        if (config.api_key) this.apiKey = config.api_key;
+        if (config.api_key) this.apiKey = config.api_key.trim();
         if (config.model_name) this.model = config.model_name;
-        // Default to kimi-2.5 if user hasn't specified a specific version and we are in multimodal context
-        if (!config.model_name && (this.model === 'kimi-latest' || this.model === 'kimi-v1-5k')) {
-            // Keep existing for script analysis, but for chat we might want to default to 2.5
-        }
+
+        console.log(`[KimiProvider] Config updated. Model: ${this.model}, Key present: ${!!this.apiKey}`);
     }
 
     private async request(messages: any[], jsonMode: boolean = false, customModel?: string) {
-        const response = await fetch(`${this.apiBase}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiKey}`
-            },
-            body: JSON.stringify({
-                model: customModel || this.model,
-                messages,
-                response_format: jsonMode ? { type: "json_object" } : undefined,
-                temperature: 0.3,
-                max_tokens: 16384
-            })
-        });
+        const targetModel = customModel || this.model;
+        try {
+            const response = await fetch(`${this.apiBase}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: targetModel,
+                    messages,
+                    response_format: jsonMode ? { type: "json_object" } : undefined,
+                    temperature: 0.3,
+                    max_tokens: 16384
+                })
+            });
 
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Kimi API Error: ${error}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[KimiProvider] Request failed (${targetModel}):`, errorText);
+                throw new Error(`Kimi API Error: ${errorText}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        } catch (err: any) {
+            console.error(`[KimiProvider] Error during request:`, err);
+            throw err;
         }
-
-        const data = await response.json();
-        return data.choices[0].message.content;
     }
 
-    async chat(messages: any[]): Promise<string> {
-        // AI Chat Assistant specifically uses kimi-2.5 for multimodal support
-        return await this.request(messages, false, "kimi-2.5");
+    async chat(messages: any[], jsonMode: boolean = false): Promise<string> {
+        // Automatically switch to vision model if images are present
+        const hasImage = messages.some(m =>
+            Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image_url')
+        );
+
+        const targetModel = hasImage ? "moonshot-v1-8k-vision-preview" : this.model;
+        if (hasImage && targetModel !== this.model) {
+            console.log(`[KimiProvider] Image detected, switching to vision model: ${targetModel}`);
+        }
+
+        return await this.request(messages, jsonMode, targetModel);
     }
 
     async structureEpisodes(script: string): Promise<{ status: ProjectStatus, episodes: Episode[] }> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 角色设定 (Role)
@@ -96,17 +110,22 @@ export class KimiProvider implements ScriptProvider {
             const result = parseJSONRobust(content, { project_status: {}, episodes: [] });
             return {
                 status: {
-                    total_episodes: result.project_status?.total_episodes || 0,
-                    division_mode: result.project_status?.division_mode === 'Original_Script_Markers' ? 'Original_Script_Markers' : 'Smart_120s_Cliffhanger'
+                    total_episodes: result.project_status?.total_episodes || result.项目状态?.总集数 || result.episodes?.length || 0,
+                    division_mode: (result.project_status?.division_mode || result.项目状态?.划分模式) === 'Original_Script_Markers' ? 'Original_Script_Markers' : 'Smart_120s_Cliffhanger'
                 },
-                episodes: result.episodes || []
+                episodes: (result.episodes || result.集数 || []).map((e: any) => ({
+                    episode_number: e.episode_number || e.集数 || e.number || 0,
+                    estimated_duration: e.estimated_duration || e.预计时长 || "",
+                    boundaries: e.boundaries || e.边界 || { start_text_anchor: "", end_text_anchor: "" },
+                    narrative_structure: e.narrative_structure || e.叙事结构 || { opening_scene: "", core_conflict: "", ending_cliffhanger: "" }
+                }))
             };
         });
     }
 
     async partitionIntoChapters(script: string): Promise<Chapter[]> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `你是一位顶级的剧集架构师。你的唯一任务是将长篇剧本精准切分为多个章节。
@@ -144,7 +163,14 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                 }
             ], true);
             const result = parseJSONRobust(content, { chapters: [] });
-            return (result.chapters || []).map((c: any) => ({ ...c, episode_ids: [] }));
+            const chapters = result.chapters || result.章节 || result.Chapters || [];
+            return chapters.map((c: any) => ({
+                id: c.id || generateId(),
+                title: c.title || c.标题 || "未命名章节",
+                summary: c.summary || c.摘要 || "",
+                content: c.content || c.内容 || "",
+                episode_ids: []
+            }));
         });
     }
 
@@ -152,7 +178,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
     async extractGlobalAssets(script: string, context: GlobalContext): Promise<{ characters: any[], scenes: any[] }> {
         const stylePreset = context.visual_style_preset || "电影感";
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 【最高优先级：全局风格宪法 - VISUAL STYLE CONSTITUTION】
@@ -191,7 +217,11 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 请从以下长剧本中提取全局核心资产：\n\n${script}`
                 }
             ], true);
-            return parseJSONRobust(content, { characters: [], scenes: [] });
+            const result = parseJSONRobust(content, { characters: [], scenes: [] });
+            return {
+                characters: result.characters || result.Character_Analysis || [],
+                scenes: result.scenes || result.Scene_Assets || []
+            };
         });
     }
 
@@ -200,7 +230,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
         // === CALL 1: Scene Extraction ===
         const scenes = await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 影视资产场景解析系统 (Scene Asset Parsing System)
@@ -303,7 +333,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
         // === CALL 2: Character Extraction ===
         const characters = await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 角色深度画像提取系统 (Character Deep Profile System)
@@ -332,52 +362,38 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 {
   "characters": [
     {
-      "char_id": "姓名拼音或英文缩写 (如: lu_chen)",
-      "name": "角色中文名",
-      "description": "外貌、服装与关键物理特征的中文详细描述（包含年龄、性别、发型、肤色、标志性服装、气质等）",
-      "age": "年龄",
-      "gender": "性别",
-      "personality": "性格关键词",
-      "occupation": "职业或身份",
-      "outfit": "基于剧情的服装材质与款式详细描述",
-      "physical_traits": "核心骨骼/面部/身体特征描述（中性表情视角）",
-      "consistency_seed_prompt": {
-        "Instruction_Role": "Master Character Designer & Lead Cinematographer",
-        "Reference_Fidelity_Protocol": {
-          "Image_Input_Analysis": "If a reference image is uploaded, strictly extract and replicate the following: facial bone structure, skin micro-textures, hair flow, and the specific lighting temperature (e.g., 3000K amber).",
-          "Scene_Alignment": "Environment generation must inherit the architectural style and color palette from the reference image to ensure spatial continuity.",
-          "Identity_Consistency_Override": "Mandatory 100% adherence to the uploaded subject’s identity. All visual outputs must serve as a direct extension of the provided reference."
-        },
-        "Identity_Consistency_Protocol": {
-          "Target_Subject": "角色体态与特征的详细中文描述。**必须明确指出人种/民族**。",
-          "Identity_Lock": "ATL (Actual-to-Life) consistency. No deviation in facial features or costume textures.",
-          "Core_Elements": "角色独有的特征或道具（中文）"
-        },
-        "Master_Layout_Grid": {
-          "Canvas_Division": "Professional character reference sheet. Aspect ratio 16:9.",
-          "Left_Zone": "One prominent, high-fidelity full-body photo (主图全身照). Shot on 35mm lens, ARRI Alexa 65 aesthetic.",
-          "Top_Right_Zone": "3-view technical full-body orthographic drawings (全身照三视图: Front, Side, Back) for modeling reference.",
-          "Bottom_Right_Zone": "3-view face close-up technical drawings (面部特写三视图: Front, 45-degree, Profile) focusing on texture and facial details."
-        },
-        "Visual_Style_Module": {
-          "Style_Definition": "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, ATL (Actual-to-Life) logic.",
-          "Rendering_Specifics": "16:9 aspect ratio, 4k, ultra-detailed skin textures, natural subsurface scattering, soft cinematic lighting.",
-          "Background": "Solid neutral grey studio background, zero environmental interference."
-        },
-        "Technical_Override": {
-          "Keywords": "ATL, realistic, photorealistic, ultra-high fidelity, 8k UHD, film grain, realistic fabric micro-textures.",
-          "Negative_Prompt": "anime, cartoon, 3d render, CGI, stylized, plastic, doll-like, inconsistent with reference image, messy composition."
-        }
+      "Role_ID": "姓名_年龄阶段或版本 (如: Mark_Childhood)",
+      "Narrative_Weight": "Level 1 (Core) / Level 2 (Supporting)",
+      "Scene_Coverage": {
+        "Total_Scenes": 0,
+        "Scene_IDs": ["S01", "S02"]
+      },
+      "Core_Profile": {
+        "Name": "角色中文名",
+        "Age": "该阶段的具体年龄或年龄段 (如: 8岁)",
+        "Gender": "生理性别",
+        "Nationality_Ethnicity": "国籍或族裔背景",
+        "Personality": "该阶段的性格关键词描述",
+        "Occupation": "该阶段的职业或身份背景 (如: 小学生)",
+        "Timeline": "该阶段所处的时代坐标 (e.g., 1998)"
+      },
+      "Visual_Reference": {
+        "Outfit": "基于该阶段剧情的服装材质与款式详细描述",
+        "Physical_Traits": "该年龄段的核心骨骼/面部/身体特征描述 (中性表情视角)"
       }
     }
   ]
 }
 
+### 6. 运行示例 (以 Mark 为例)
+当系统检测到剧本中 Mark 贯穿了不同的人生阶段时，会将其视为完全不同的视觉资产，分别输出至少 3 个独立的角色对象：
+- Mark_Childhood: 提取并设计其 8 岁时的资产，描述其幼童的面部比例、特定年代的童装材质及孩童独有的神态特征。
+- Mark_MiddleAge: 提取并设计其 35 岁时的资产，描述其作为“完美丈夫”时期的成年骨骼结构、米色针织衫细节及细微的疲惫感。
+- Mark_OldAge: 提取并设计其 70 岁时的资产，描述其老年时期的皮肤纹理（老年斑、下垂的眼袋）、苍白的毛发及陈旧的衣物质感。
+
 ### 语言规则
-- name, description, personality, outfit, physical_traits 使用中文
-- consistency_seed_prompt 内的所有值必须为中文
-- consistency_seed_prompt 必须是一个 JSON 对象（不是字符串）
-- **重要 (CRITICAL)**: \`Target_Subject\` 必须明确指出角色的人种/国籍（如：Chinese, Asian, Caucasian, etc.）以确保 AI 生成图像的一致性。`
+- 所有层级的描述及 Name 使用中文。
+- **重要 (CRITICAL)**: \`Nationality_Ethnicity\` 必须明确指出角色的人种/国籍（如：Chinese, Asian, Caucasian, etc.）以确保后续 AI 生成图像的一致性。`
                 },
                 {
                     role: 'user',
@@ -386,18 +402,16 @@ content 是剧本原文的**完整拷贝**，不是摘要。
             ], true);
             const result = parseJSONRobust(content, { characters: [] });
             return (result.characters || result.Character_Analysis || []).map((c: any) => ({
-                char_id: c.char_id || c.Role_ID,
-                name: c.name || c.Core_Profile?.Name,
-                description: c.description || '',
-                age: c.age || c.Core_Profile?.Age || '',
-                gender: c.gender || c.Core_Profile?.Gender || '',
-                personality: c.personality || c.Core_Profile?.Personality || '',
-                occupation: c.occupation || c.Core_Profile?.Occupation || '',
-                outfit: c.outfit || c.Visual_Reference?.Outfit || '',
-                physical_traits: c.physical_traits || c.Visual_Reference?.Physical_Traits || '',
-                consistency_seed_prompt: typeof c.consistency_seed_prompt === 'object'
-                    ? JSON.stringify(c.consistency_seed_prompt, null, 2)
-                    : (c.consistency_seed_prompt || ''),
+                char_id: c.Role_ID || c.char_id,
+                name: c.Core_Profile?.Name || c.name,
+                description: `${c.Core_Profile?.Age || c.age || ''} ${c.Core_Profile?.Gender || c.gender || ''}，${c.Core_Profile?.Nationality_Ethnicity || ''}。${c.Core_Profile?.Personality || c.personality || ''}。身穿${c.Visual_Reference?.Outfit || c.outfit || ''}。特征：${c.Visual_Reference?.Physical_Traits || c.physical_traits || ''}`,
+                age: c.Core_Profile?.Age || c.age || '',
+                gender: c.Core_Profile?.Gender || c.gender || '',
+                personality: c.Core_Profile?.Personality || c.personality || '',
+                occupation: c.Core_Profile?.Occupation || c.occupation || '',
+                outfit: c.Visual_Reference?.Outfit || c.outfit || '',
+                physical_traits: c.Visual_Reference?.Physical_Traits || c.physical_traits || '',
+                consistency_seed_prompt: '',
                 seed: Math.floor(Math.random() * 1000000)
             }));
         });
@@ -405,12 +419,34 @@ content 是剧本原文的**完整拷贝**，不是摘要。
         return { characters, scenes };
     }
 
+    private normalizeShotType(val: string): string {
+        if (!val) return "MS";
+        const v = val.toLowerCase();
+        if (v.includes("特写") || v.includes("cu") || v.includes("close up")) return "CU";
+        if (v.includes("中景") || v.includes("ms") || v.includes("medium")) return "MS";
+        if (v.includes("全景") || v.includes("ls") || v.includes("long shot") || v.includes("wide")) return "LS";
+        if (v.includes("主观") || v.includes("pov")) return "POV";
+        return val;
+    }
+
+    private normalizeCameraAngle(val: string): string {
+        if (!val) return "Cinematic Eye-level";
+        const v = val.toLowerCase();
+        if (v.includes("平视") || v.includes("eye") || v.includes("standard")) return "Cinematic Eye-level";
+        if (v.includes("低角度") || v.includes("仰拍") || v.includes("low")) return "Low Angle";
+        if (v.includes("高角度") || v.includes("俯拍") || v.includes("high")) return "High Angle";
+        if (v.includes("鸟瞰") || v.includes("bird")) return "Bird Eye View";
+        if (v.includes("极端低") || v.includes("extreme low")) return "Extreme Low Angle";
+        if (v.includes("荷兰") || v.includes("dutch")) return "Dutch Angle";
+        return val;
+    }
+
     async generateStoryboard(script: string, characters: any[], scenes: any[]): Promise<{ metadata: ProjectMetadata; initial_script: any[] }> {
         const charContext = characters.map(c => `${c.char_id}(Name: ${c.name}, Description: ${c.description})`).join(', ');
         const sceneContext = scenes.map(s => `${s.scene_id}(Name: ${s.name}, Description: ${s.description}, Lighting: ${s.core_lighting})`).join(', ');
 
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 【最高优先级语言规则 - MANDATORY LANGUAGE RULE】
@@ -501,34 +537,42 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
             const metadata: ProjectMetadata = {
                 id: '',
-                bpm: result.metadata?.bpm || 120,
-                energy_level: result.metadata?.energy_level || 'Medium',
-                overall_mood: result.metadata?.overall_mood || 'Neutral',
-                transitions: Array.isArray(result.metadata?.transitions) ? result.metadata.transitions : []
+                bpm: result.metadata?.bpm || result.元数据?.bpm || 120,
+                energy_level: result.metadata?.energy_level || result.元数据?.能量等级 || 'Medium',
+                overall_mood: result.metadata?.overall_mood || result.元数据?.整体氛围 || 'Neutral',
+                transitions: Array.isArray(result.metadata?.transitions || result.元数据?.转场) ? (result.metadata?.transitions || result.元数据?.转场) : []
             };
 
-            const initial_script = (result.shots || []).map((s: any) => ({
-                shot_number: s.shot_number,
-                shot_type: s.description?.shot_type,
-                camera_angle: s.description?.camera_angle,
-                camera_movement: s.description?.camera_movement,
-                lens_and_aperture: s.description?.lens_and_aperture,
-                lighting_vibe: s.description?.lighting,
-                action_description: s.description?.content,
-                sound_design: s.description?.sound_design,
-                lyric_line: s.lyric_line,
-                character_ids: s.characters || [],
-                scene_id: s.scene,
-                ai_prompts: s.ai_prompts,
-                script_content: s.script_content,
-                image_description: s.image_description,
-                dialogue: s.dialogue,
-                action_state: s.action_state,
-                narrative_function: s.narrative_function,
-                time_coord: s.time_coord,
-                era_coord: s.era_coord,
-                date_coord: s.date_coord
-            }));
+            const shots = result.shots || result.分镜 || result.镜号 || result.Storyboard_Items || [];
+            const initial_script = shots.map((s: any) => {
+                const imgPrompt = s.ai_prompts?.image_generation_prompt || s.提示词 || s.image_prompt || s.prompt || s.image_generation_prompt || "";
+                const vidPrompt = s.ai_prompts?.video_generation_prompt || s.视频提示词 || s.video_prompt || s.video_generation_prompt || imgPrompt;
+
+                return {
+                    shot_number: s.shot_number || s.序号 || 0,
+                    shot_type: this.normalizeShotType(s.shot_type || s.description?.shot_type || s.镜头类型 || s.景别 || "MS"),
+                    camera_angle: this.normalizeCameraAngle(s.camera_angle || s.description?.camera_angle || s.拍摄角度 || s.角度 || "Cinematic Eye-level"),
+                    camera_movement: s.camera_movement || s.description?.camera_movement || s.镜头运动 || s.运镜 || "Static",
+                    lens_and_aperture: s.lens_and_aperture || s.description?.lens_and_aperture || s.光圈焦段 || s.焦段 || "35mm f/2.8",
+                    lighting_vibe: s.lighting_vibe || s.description?.lighting || s.光影氛围 || s.光影 || "Natural",
+                    action_description: s.action_description || s.description?.content || s.description?.action || s.画面内容描述 || s.画面描述 || "",
+                    sound_design: s.sound_design || s.description?.sound_design || s.音效设计 || "",
+                    lyric_line: s.lyric_line || s.台词 || "",
+                    character_ids: s.characters || s.character_ids || [],
+                    scene_id: s.scene || s.scene_id || "",
+                    ai_prompts: {
+                        image_generation_prompt: imgPrompt,
+                        video_generation_prompt: vidPrompt
+                    },
+                    image_prompt: imgPrompt,
+                    video_prompt: vidPrompt,
+                    script_content: s.script_content || s.剧本内容 || "",
+                    image_description: s.image_description || s.画面视觉描述 || s.画面描述 || "",
+                    dialogue: s.dialogue || s.台词 || "",
+                    action_state: s.action_state || s.角色当前动作状态详细描述 || s.动作状态 || "",
+                    narrative_function: s.narrative_function || s.该镜头的叙事功能或隐喻意义 || s.叙事功能 || ""
+                };
+            });
 
             return { metadata, initial_script };
         });
@@ -536,7 +580,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
     async forgeCharacterDNA(draft: any, context: GlobalContext): Promise<CharacterDNA> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `Generate a character design JSON. Use this internal structure:
@@ -605,7 +649,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
 
     async forgeSceneDNA(draft: any, context: GlobalContext): Promise<SceneDNA> {
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `Generate an environment concept JSON. Use this internal structure:
@@ -730,7 +774,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                 }
             };
 
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `You are an AI prompt engineer specializing in high-fidelity Visual DNA.
@@ -843,7 +887,7 @@ content 是剧本原文的**完整拷贝**，不是摘要。
         const scenesList = context.scenes.map(s => `- ${s.name} (ID: ${s.scene_id}): ${s.description || '无描述'}`).join('\n');
 
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 【最高优先级：全局风格宪法 - VISUAL STYLE CONSTITUTION】
@@ -923,7 +967,7 @@ ${scenesList || '暂无全局场景资产'}
         const scenesList = context.scenes.map(s => `- ${s.name} (ID: ${s.scene_id}): ${s.description || '无描述'}`).join('\n');
 
         return await withRetry(async () => {
-            const content = await this.request([
+            const content = await this.chat([
                 {
                     role: 'system',
                     content: `## 【最高优先级：全局风格宪法 - VISUAL STYLE CONSTITUTION】

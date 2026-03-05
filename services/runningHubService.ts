@@ -246,22 +246,24 @@ export const pollTask = async (taskId: string, config?: RunningHubConfig, timeou
         }
 
         const result = await resp.json();
-        const status = result.status;
-        console.log(`[RunningHub] Task ${taskId} status: ${status} (Attempt ${attempts})`);
+        const status = (result.status || result.data?.status || "").toUpperCase();
+        console.log(`[RunningHub] Task ${taskId} status: ${status} (Attempt ${attempts})`, result);
 
-        if (status === "SUCCESS") {
-            console.log(`[RunningHub] Task ${taskId} Success! Results:`, JSON.stringify(result.results));
-            if (result.results && result.results.length > 0) {
-                const output = result.results.find((r: any) => r.url);
+        if (status === "SUCCESS" || status === "SUCCEEDED") {
+            console.log(`[RunningHub] Task ${taskId} Success! Results:`, JSON.stringify(result.results || result.data?.results));
+            const results = result.results || result.data?.results;
+            if (results && results.length > 0) {
+                const output = results.find((r: any) => r.url || r.videoUrl || r.imageUrl);
                 if (output) {
-                    const proxied = proxyRunningHubUrl(output.url);
+                    const finalUrl = output.url || output.videoUrl || output.imageUrl;
+                    const proxied = proxyRunningHubUrl(finalUrl);
                     console.log(`[RunningHub] Returning proxied URL: ${proxied}`);
                     return proxied;
                 }
             }
             throw new Error(`Task Succeeded but no results found: ${JSON.stringify(result)}`);
-        } else if (status === "FAILED") {
-            const errorMsg = result.errorMessage || result.errorCode || "Unknown RunningHub Error";
+        } else if (status === "FAILED" || status === "ERROR") {
+            const errorMsg = result.errorMessage || result.data?.errorMessage || result.errorCode || "Unknown RunningHub Error";
             console.error(`[RunningHub] Task ${taskId} FAILED:`, JSON.stringify(result, null, 2));
             throw new Error(`RunningHub Task Failed: ${errorMsg}`);
         }

@@ -61,26 +61,19 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                                 </button>
                             ))}
                         </div>
-                        <div className="mt-2 pl-1 group">
-                            <details className="cursor-pointer">
-                                <summary className="text-[9px] text-zinc-600 hover:text-zinc-400 font-bold uppercase tracking-wider outline-none">
-                                    高级配置 ({globalContext.script_engine === 'kimi' ? 'Kimi' : globalContext.script_engine === 'glm5' ? 'GLM-5' : 'Gemini'})
-                                </summary>
-                                <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    {globalContext.script_engine === 'glm5' && (
-                                        <div className="flex items-center justify-between px-3 py-2 bg-black border border-white/5 rounded-lg">
-                                            <span className="text-[10px] text-zinc-400 font-bold">开启思维链 (CoT)</span>
-                                            <button
-                                                onClick={() => updateEngineConfig('glm5', 'enable_thinking', globalContext.engine_configs?.['glm5']?.enable_thinking === false ? true : false as any)}
-                                                className={`w-8 h-4 rounded-full transition-all relative ${globalContext.engine_configs?.['glm5']?.enable_thinking !== false ? 'bg-[#D4AF37]' : 'bg-zinc-700'}`}
-                                            >
-                                                <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${globalContext.engine_configs?.['glm5']?.enable_thinking !== false ? 'left-4.5' : 'left-0.5'}`} />
-                                            </button>
-                                        </div>
-                                    )}
+                        <div className="mt-4 p-4 bg-[#D4AF37]/5 rounded-2xl border border-[#D4AF37]/10 animate-in fade-in slide-in-from-top-2">
+                            <h3 className="text-[10px] font-black text-[#D4AF37] uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4H4m6 0h10m-6-4V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4H4m6 0h10" /></svg>
+                                接口与模型详细配置
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider pl-1">
+                                        {globalContext.script_engine === 'google' ? "API 代理地址 (API Base)" : "API 密钥 (API Key)"}
+                                    </label>
                                     <input
                                         type="password"
-                                        placeholder={globalContext.script_engine === 'google' ? "API Base URL (e.g. 代理地址)" : "API Key"}
+                                        placeholder={globalContext.script_engine === 'google' ? "例如: https://your-proxy.com/v1" : "输入 API Key"}
                                         value={
                                             globalContext.script_engine === 'kimi'
                                                 ? globalContext.engine_configs?.['kimi']?.api_key_override || ''
@@ -97,17 +90,32 @@ const ContextSettings: React.FC<ContextSettingsProps> = ({ className }) => {
                                                 updateEngineConfig('google', 'api_base', e.target.value);
                                             }
                                         }}
-                                        className="w-full bg-black border border-white/5 rounded-lg px-3 py-2 text-[10px] text-zinc-400 outline-none focus:border-[#D4AF37]/30"
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="自定义模型名称 (可选)"
-                                        value={globalContext.engine_configs?.[globalContext.script_engine]?.model_name || ''}
-                                        onChange={(e) => updateEngineConfig(globalContext.script_engine, 'model_name', e.target.value)}
-                                        className="w-full bg-black border border-white/5 rounded-lg px-3 py-2 text-[10px] text-zinc-400 outline-none focus:border-[#D4AF37]/30"
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-[11px] text-zinc-300 outline-none focus:border-[#D4AF37]/40 transition-all font-mono"
                                     />
                                 </div>
-                            </details>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider pl-1">自定义模型名称 (可选)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="默认模型"
+                                        value={globalContext.engine_configs?.[globalContext.script_engine]?.model_name || ''}
+                                        onChange={(e) => updateEngineConfig(globalContext.script_engine, 'model_name', e.target.value)}
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-[11px] text-zinc-300 outline-none focus:border-[#D4AF37]/40 transition-all"
+                                    />
+                                </div>
+                                {globalContext.script_engine === 'glm5' && (
+                                    <div className="flex items-center justify-between px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl">
+                                        <span className="text-[10px] text-zinc-400 font-bold">开启思维链 (CoT)</span>
+                                        <button
+                                            onClick={() => updateEngineConfig('glm5', 'enable_thinking', globalContext.engine_configs?.['glm5']?.enable_thinking === false ? true : false as any)}
+                                            title="切换思维链 (CoT)"
+                                            className={`w-8 h-4 rounded-full transition-all relative ${globalContext.engine_configs?.['glm5']?.enable_thinking !== false ? 'bg-[#D4AF37]' : 'bg-zinc-700'}`}
+                                        >
+                                            <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${globalContext.engine_configs?.['glm5']?.enable_thinking !== false ? 'left-4.5' : 'left-0.5'}`} />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
