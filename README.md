@@ -6,7 +6,7 @@
 
 This contains everything you need to run your app locally.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1xc8b3nG9-tWi-h9MK1e3OBCnqnZxBSbN
+View your app in AI Studio: <https://ai.studio/apps/drive/1xc8b3nG9-tWi-h9MK1e3OBCnqnZxBSbN>
 
 ## Run Locally
 
@@ -15,11 +15,15 @@ View your app in AI Studio: https://ai.studio/apps/drive/1xc8b3nG9-tWi-h9MK1e3OB
 1. Install dependencies:
    `npm install`
 2. Copy `.env.local.example` to `.env.local` and configure:
+
    ```bash
    cp .env.local.example .env.local
    ```
+
 3. Set API keys in `.env.local`:
    - `GEMINI_API_KEY` - Your Gemini API key (required)
+   - `GLM_API_KEY` - Your ZhipuAI GLM API key (optional, for script analysis)
+   - `KIMI_API_KEY` - Your Moonshot Kimi API key (optional, for script analysis)
    - `RUNNINGHUB_API_KEY` - Your RunningHub API key (optional, for video generation)
 4. Run the app:
    `npm run dev`
