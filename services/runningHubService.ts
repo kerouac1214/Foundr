@@ -4,7 +4,9 @@ import { proxyRunningHubUrl } from "../utils/urlUtils";
 const PROXY_BASE_URL = process.env.VITE_API_BASE_URL || "https://rough-mode-92f3.kerouac1214.workers.dev";
 // Route through Vite proxy in dev to avoid CORS issues
 const RUNNINGHUB_API_KEY = process.env.RUNNINGHUB_API_KEY || "";
-const DEFAULT_BASE_URL = "/runninghub";
+
+const isProd = import.meta.env.PROD || (window as any).process?.type === 'renderer';
+const DEFAULT_BASE_URL = isProd ? "https://www.runninghub.cn" : "/runninghub";
 
 export interface RunningHubConfig {
     api_base?: string;

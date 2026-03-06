@@ -5,6 +5,11 @@
 export const proxyRunningHubUrl = (url: string): string => {
     if (!url) return url;
 
+    const isProd = import.meta.env.PROD || (window as any).process?.type === 'renderer';
+
+    // In production/Electron, we want to use the absolute URL directly to avoid proxy issues
+    if (isProd) return url;
+
     // Catch various RunningHub bucket variations (e.g., rh-images, rh-assets, etc. on myqcloud.com)
     // Example: https://rh-images-1252422369.cos.ap-beijing.myqcloud.com/path/to/image.png
     const rhBucketRegex = /https?:\/\/rh-[^/]+\.myqcloud\.com/i;
