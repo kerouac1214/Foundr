@@ -1,7 +1,7 @@
 {
   "name": "短剧导演专业版-(-director-pro)",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.12.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,16 +12,21 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.38.0",
+    "@remotion/player": "^4.0.219",
     "dexie": "^4.3.0",
     "jszip": "^3.10.1",
     "mammoth": "^1.11.0",
     "pdfjs-dist": "^5.4.624",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "remotion": "^4.0.219",
     "xlsx": "^0.18.5",
+    "zod": "^3.25.76",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@remotion/bundler": "^4.0.219",
+    "@remotion/cli": "^4.0.219",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.10",

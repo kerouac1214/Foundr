@@ -9,7 +9,8 @@ import {
     StoryboardItem,
     Episode,
     ProjectStatus,
-    Chapter
+    Chapter,
+    ImageEngine
 } from "../../types";
 import { withRetry, getAIClient, parseJSONRobust } from "../core";
 import { ScriptProvider, ImageProvider, VideoProvider } from "./base";
@@ -683,21 +684,46 @@ ${script}
         });
     }
 
-    async generateImage(prompt: string, seed: number, aspectRatio: AspectRatio): Promise<string> {
+    async generateImage(
+        prompt: string,
+        options: {
+            seed?: number,
+            aspect_ratio: AspectRatio,
+            image_engine?: ImageEngine,
+            reference_image_url?: string
+        }
+    ): Promise<{ preview_url: string }> {
         const ai = this.getClient();
         return await withRetry(async () => {
             const response = await ai.models.generateContent({
                 model: this.imageModel,
-                contents: { parts: [{ text: `${prompt} --seed ${seed}` }] },
-                config: { imageConfig: { aspectRatio } }
+                contents: {
+                    parts: [
+                        { text: `${prompt}${options.seed ? ` --seed ${options.seed}` : ''}` },
+                        ...(options.reference_image_url ? [{
+                            inlineData: {
+                                data: options.reference_image_url.split(',')[1] || options.reference_image_url,
+                                mimeType: 'image/png' // Assuming PNG or base64
+                            }
+                        }] : [])
+                    ]
+                },
+                config: { imageConfig: { aspectRatio: options.aspect_ratio } }
             });
             const part = response.candidates?.[0]?.content.parts.find(p => p.inlineData);
-            if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+            if (part?.inlineData) return { preview_url: `data:image/png;base64,${part.inlineData.data}` };
             throw new Error("Gemini Image Engine failed to produce data.");
         }, 5, 5000);
     }
 
-    async generateVideo(prompt: string, aspectRatio: AspectRatio): Promise<string> {
+    async generateVideo(
+        prompt: string,
+        options: {
+            aspect_ratio: AspectRatio,
+            video_engine?: string,
+            source_image_url?: string
+        }
+    ): Promise<{ video_url: string }> {
         const ai = this.getClient();
         return await withRetry(async () => {
             let operation = await ai.models.generateVideos({
@@ -706,7 +732,7 @@ ${script}
                 config: {
                     numberOfVideos: 1,
                     resolution: '720p',
-                    aspectRatio: aspectRatio === '16:9' ? '16:9' : '9:16'
+                    aspectRatio: options.aspect_ratio === '16:9' ? '16:9' : '9:16'
                 }
             });
 
@@ -723,7 +749,7 @@ ${script}
             if (!videoResp.ok) throw new Error(`Video download failed: ${videoResp.statusText}`);
 
             const blob = await videoResp.blob();
-            return URL.createObjectURL(blob);
+            return { video_url: URL.createObjectURL(blob) };
         });
     }
 
@@ -1032,6 +1058,134 @@ ${scenesList}
                 render_status: 'idle',
                 isLocked: false
             } as StoryboardItem));
+        });
+    }
+
+    async generateMovieNarrative(script: string, referenceImage: string): Promise<any> {
+        return await withRetry(async () => {
+            const prompt = `<role>
+You are an award-winning storyboard artist + narrative cinematographer.
+Your job: turn a screenplay/script + one reference image into a coherent, continuous story sequence, then output a ready-to-use storyboard grid of key story frames.
+</role>
+<input>
+1A script / screenplay text:
+${script}
+
+One reference image (for visual style, characters, environment, tone)
+</input>
+<non-negotiable rules - continuity & visual consistency>
+First, analyze the reference image fully: identify ALL key subjects (person/group/vehicle/object/animal/props/environment elements) and describe spatial relationships, positions (left/right/foreground/background), facing direction, and actions.
+Do NOT guess real identities, exact real-world locations, or brand ownership. Stick to visible facts. Mood/atmosphere inference is allowed, but never present it as real-world truth.
+Strict visual continuity across ALL frames:
+Same characters, same wardrobe/appearance/features
+Same environment, architecture, props
+Same time-of-day, lighting style, color grade
+Only changes allowed: shot size, angle, framing, camera position, character blocking, facial expression, and action progress.
+Depth of field must be realistic: deeper in wide shots, shallower in close‑ups with natural bokeh.
+Maintain ONE consistent cinematic color grade across the entire storyboard.
+Do NOT introduce new characters or major objects not present in the reference image. Tension or drama must come from performance, framing, lighting, or off-screen implication.
+</non-negotiable rules - continuity & visual consistency>
+<goal>
+Translate the provided script into a visual story sequence that follows the plot beat by beat.
+Output a clean, editor-friendly storyboard grid that can be directly used for animation, AI video generation, or film production.
+</goal>
+<step 1 - scene & script breakdown>
+Output with clear subheadings:
+Subjects: List each key character/object (A/B/C…), describe appearance, wardrobe, relative positions, facing direction, and actions based on the reference image and script.
+Environment & Lighting: interior/exterior, spatial layout, background, materials, light direction & quality (hard/soft; key/fill/rim), implied time-of-day, 3–8 vibe/mood keywords.
+Visual Anchors: 3–6 fixed visual elements that must stay consistent across all frames (palette, key prop, main light source, weather, texture, signature background).
+Script Beats: Summarize the plot in 4–8 sequential story beats (setup → conflict → development → climax → resolution).
+</step 1>
+<step 2 - story & tone>
+Theme: One clear sentence.
+Story Summary: One short sentence that connects the script to the visual style.
+Emotional Arc: 4 beats (setup → build → turn → payoff) matching the script.
+</step 2>
+<step 3 - visual storytelling approach>
+Shot progression: How you shift shot sizes (wide → medium → close‑up) to follow story tension.
+Camera logic: Angle choices (eye-level / low / high) and purpose for each story beat.
+Lens & depth: Focal length range, depth of field style (shallow/medium/deep).
+Color & light: Consistent palette, contrast level, material rendering, film grain (if applicable).
+</step 3>
+<step 4 - storyboard keyframes (primary output)>
+Output a numbered Keyframe List (default 9–15 frames) that follows the script scene by scene, beat by beat.
+Each frame continues the story logically in the same consistent world.
+Use this exact format per frame:
+[KF# | suggested screen time (sec) | shot type (ELS/LS/MLS/MS/MCU/CU/ECU/Low/High/Insert)]
+Composition: subject placement, foreground/mid/background, framing
+Story Action: what happens in this frame (matches the script)
+Camera: height, angle, position
+Lens/DoF: focal length, depth of field, focus point
+Lighting & grade: consistent with reference
+Sound (optional): atmosphere or foley to support the moment
+Hard requirements:
+Include at least:
+1 establishing wide shot
+1 character close-up
+1 detail insert / extreme close-up
+1 dramatic low or high angle shot
+Maintain eyeline match, screen direction, and action continuity.
+</step 4>
+<step 5 - storyboard grid output (MUST OUTPUT ONE BIG GRID IMAGE)>
+You MUST output ONE single, clean storyboard grid image that contains all keyframes in one unified layout.
+Default grid: 3×3, 4×3, or 5×3 so every frame fits.
+Each panel must be clearly labeled:
+KF number + shot type + duration
+Labels go in safe margins, never covering subjects.
+All panels share:
+Same characters, look, environment, lighting, color grade
+Realistic depth of field
+Photorealistic / cinematic texture matching the reference
+After the grid image, list the full prompt breakdown for each keyframe in order so the user can re-render any frame in high quality.
+</step 5>
+<final output format>
+Output in this order:
+A) Scene & Script Breakdown
+B) Story & Tone
+C) Visual Storytelling Approach
+D) Storyboard Keyframes (full list)
+E) One Unified Storyboard Grid Image (all frames in one grid)
+</final output format>。
+
+Return the output as a JSON object:
+{
+  "breakdown": "Text for Step 1",
+  "story_tone": "Text for Step 2",
+  "approach": "Text for Step 3",
+  "keyframes_text": "Text for Step 4",
+  "prompt_breakdown": "Prompt breakdown for each keyframe",
+  "image_gen_instruction": "A single optimized prompt for the image engine to generate the 9-grid image."
+}`;
+
+            const messages: any[] = [{
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    { type: 'image_url', image_url: { url: referenceImage } }
+                ]
+            }];
+
+            const text = await this.chat(messages, true);
+            const result = parseJSONRobust(text || '', {});
+
+            // Generate the grid image using the image engine
+            let grid_image_url = "";
+            if (result.image_gen_instruction) {
+                const imgResult = await this.generateImage(result.image_gen_instruction, {
+                    seed: Math.floor(Math.random() * 1000000),
+                    aspect_ratio: "16:9"
+                });
+                grid_image_url = imgResult.preview_url;
+            }
+
+            return {
+                breakdown: result.breakdown || "",
+                story_tone: result.story_tone || "",
+                approach: result.approach || "",
+                keyframes: result.keyframes_text || "",
+                grid_image_url: grid_image_url,
+                prompt_breakdown: result.prompt_breakdown || ""
+            };
         });
     }
 

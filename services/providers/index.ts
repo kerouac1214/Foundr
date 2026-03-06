@@ -74,6 +74,21 @@ class CloudScriptProvider implements ScriptProvider {
     forgeSceneDNA = (draft: any, context: GlobalContext) => this.localProvider.forgeSceneDNA(draft, context);
     refineAssetDNA = (name: string, description: string, type: 'character' | 'scene', context: GlobalContext, referenceImage?: string) => this.localProvider.refineAssetDNA(name, description, type, context, referenceImage);
     generateImagePrompt = (item: StoryboardItem, characters: CharacterDNA[], scene: SceneDNA | undefined, env: EnvironmentDNA | undefined, context: GlobalContext) => this.localProvider.generateImagePrompt(item, characters, scene, env, context);
+    generateMovieNarrative = (script: string, referenceImage: string) => this.localProvider.generateMovieNarrative(script, referenceImage);
+
+    async generateImage(prompt: string, options: any) {
+        if (this.localProvider.generateImage) {
+            return this.localProvider.generateImage(prompt, options);
+        }
+        throw new Error("Local provider does not support generateImage");
+    }
+
+    async generateVideo(prompt: string, options: any) {
+        if (this.localProvider.generateVideo) {
+            return this.localProvider.generateVideo(prompt, options);
+        }
+        throw new Error("Local provider does not support generateVideo");
+    }
 
     // Only proxy the chat method to Laf
     async chat(messages: any[], jsonMode: boolean = false): Promise<string> {

@@ -290,6 +290,20 @@ export const cloneVoice = async (audioBase64: string, text: string, config?: Run
     return await pollTask(taskId, config);
 };
 
+export const designVoice = async (text: string, style: string, config?: RunningHubConfig): Promise<string> => {
+    const VOICE_DESIGN_WORKFLOW_ID = "2014619791213993986";
+
+    // 1. Run
+    const taskId = await runWorkflow(VOICE_DESIGN_WORKFLOW_ID, [
+        { nodeId: "22", fieldName: "text", fieldValue: text, description: "dialogue" },
+        { nodeId: "23", fieldName: "text", fieldValue: style, description: "style/voice prompt" }
+    ], config);
+    console.log("Voice Design Task Started:", taskId);
+
+    // 2. Poll
+    return await pollTask(taskId, config);
+};
+
 export const runSeedance15 = async (params: { prompt: string, imageUrl: string, duration?: string, resolution?: string, aspectRatio?: string }, config?: RunningHubConfig) => {
     const apiBase = config?.api_base || DEFAULT_BASE_URL;
     const apiKey = config?.api_key || RUNNINGHUB_API_KEY;

@@ -21,6 +21,9 @@ import EpisodeDashboard from './components/EpisodeDashboard';
 import ChapterSidebar from './components/ChapterSidebar';
 import LoadingInsights from './components/LoadingInsights';
 import AIChatAssistant from './components/AIChatAssistant';
+import AIApplicationSection from './components/AIApplicationSection';
+import { Player } from '@remotion/player';
+import { StoryboardComposition } from './remotion/Composition';
 
 const App: React.FC = () => {
   // Store State (Reactive with Selectors)
@@ -43,6 +46,7 @@ const App: React.FC = () => {
   const isAnalyzing = useUIStore(s => s.isAnalyzing);
   const progress = useUIStore(s => s.progress);
   const statusMessage = useUIStore(s => s.statusMessage);
+  const playerRef = useRef<any>(null);
   const error = useUIStore(s => s.error);
   const setError = useUIStore(s => s.setError);
   const toast = useUIStore(s => s.toast);
@@ -422,30 +426,57 @@ const App: React.FC = () => {
                 )}
 
                 {activeView === 'ai_application' && (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/10 animate-pulse">
-                      <svg className="w-10 h-10 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.642.316a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-                    </div>
-                    <div className="text-center space-y-2">
-                      <h2 className="text-2xl font-black tracking-widest text-white uppercase italic">AI 应用 (AI Application)</h2>
-                      <p className="text-sm text-zinc-500 font-medium tracking-[0.2em]">模块开发中...</p>
-                    </div>
-                  </div>
+                  <AIApplicationSection />
                 )}
 
                 {activeView === 'video_master' && (
                   <div className="max-w-[1200px] mx-auto">
                     <div className="bg-black rounded-3xl overflow-hidden border border-gray-800 shadow-2xl relative">
                       <div className={`${globalContext.aspect_ratio === '16:9' ? 'aspect-video' : 'aspect-[9/16]'} bg-zinc-900`}>
-                        {storyboard[masterPlayingIdx]?.video_url ? (
-                          <video ref={videoPlayerRef} src={storyboard[masterPlayingIdx].video_url} className="w-full h-full object-cover" autoPlay playsInline />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-600">等待渲染...</div>
-                        )}
+                        <Player
+                          ref={playerRef}
+                          component={StoryboardComposition}
+                          inputProps={{ storyboard }}
+                          durationInFrames={Math.max(1, Math.round(storyboard.reduce((acc, item) => acc + (item.duration || 3), 0) * 30))}
+                          compositionWidth={globalContext.aspect_ratio === '9:16' ? 1080 : 1920}
+                          compositionHeight={globalContext.aspect_ratio === '9:16' ? 1920 : 1080}
+                          fps={30}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                          }}
+                          controls
+                          onFrameUpdate={(frame) => {
+                            let cumulativeFrames = 0;
+                            const fps = 30;
+                            for (let i = 0; i < storyboard.length; i++) {
+                              const shotDuration = Math.round((storyboard[i].duration || 3) * fps);
+                              if (frame >= cumulativeFrames && frame < cumulativeFrames + shotDuration) {
+                                if (masterPlayingIdx !== i) setMasterPlayingIdx(i);
+                                break;
+                              }
+                              cumulativeFrames += shotDuration;
+                            }
+                          }}
+                        />
                       </div>
                     </div>
                     <div className="mt-8">
-                      <Timeline storyboard={storyboard} currentIndex={masterPlayingIdx} onSeek={setMasterPlayingIdx} />
+                      <Timeline
+                        storyboard={storyboard}
+                        currentIndex={masterPlayingIdx}
+                        onSeek={(idx) => {
+                          setMasterPlayingIdx(idx);
+                          if (playerRef.current) {
+                            let targetFrame = 0;
+                            const fps = 30;
+                            for (let i = 0; i < idx; i++) {
+                              targetFrame += Math.round((storyboard[i].duration || 3) * fps);
+                            }
+                            playerRef.current.seekTo(targetFrame);
+                          }
+                        }}
+                      />
                     </div>
                   </div>
                 )}
@@ -455,25 +486,27 @@ const App: React.FC = () => {
         </main>
 
         {/* Loading Overlay */}
-        {isAnalyzing && (
-          <div className="fixed inset-0 bg-black/98 backdrop-blur-[100px] z-[100] flex flex-col items-center justify-center animate-in fade-in">
-            <div className="w-16 h-16 bg-[#D4AF37] rounded-2xl flex items-center justify-center font-black italic text-2xl animate-pulse text-black mb-8">F</div>
+        {
+          isAnalyzing && (
+            <div className="fixed inset-0 bg-black/98 backdrop-blur-[100px] z-[100] flex flex-col items-center justify-center animate-in fade-in">
+              <div className="w-16 h-16 bg-[#D4AF37] rounded-2xl flex items-center justify-center font-black italic text-2xl animate-pulse text-black mb-8">F</div>
 
-            <div className="w-full h-full flex items-center justify-center mb-12">
-              <LoadingInsights />
-            </div>
+              <div className="w-full h-full flex items-center justify-center mb-12">
+                <LoadingInsights />
+              </div>
 
-            <div className="w-full max-w-lg px-16 space-y-8">
-              <div className="flex justify-between items-end px-4">
-                <span className="text-[14px] font-black uppercase tracking-[0.8em] text-[#D4AF37] serif">{statusMessage}</span>
-                <span className="text-xl font-black mono text-zinc-300">{progress}%</span>
-              </div>
-              <div className="h-[2px] w-full bg-white/10 rounded-full overflow-hidden relative">
-                <div className="h-full bg-[#D4AF37] shadow-[0_0_40px_rgba(212,175,55,1)] transition-all duration-1000" style={{ width: `${progress}%` }} />
+              <div className="w-full max-w-lg px-16 space-y-8">
+                <div className="flex justify-between items-end px-4">
+                  <span className="text-[14px] font-black uppercase tracking-[0.8em] text-[#D4AF37] serif">{statusMessage}</span>
+                  <span className="text-xl font-black mono text-zinc-300">{progress}%</span>
+                </div>
+                <div className="h-[2px] w-full bg-white/10 rounded-full overflow-hidden relative">
+                  <div className="h-full bg-[#D4AF37] shadow-[0_0_40px_rgba(212,175,55,1)] transition-all duration-1000" style={{ width: `${progress}%` }} />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
         {/* Global Toast */}
         {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
@@ -481,22 +514,26 @@ const App: React.FC = () => {
         {/* Onboarding */}
         {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
 
-        {showProjectList && (
-          <ProjectList
-            onClose={() => setShowProjectList(false)}
-          />
-        )}
+        {
+          showProjectList && (
+            <ProjectList
+              onClose={() => setShowProjectList(false)}
+            />
+          )
+        }
 
         {/* Batch Progress Modal */}
-        {batchProgress && (
-          <BatchProgressModal
-            progress={batchProgress}
-            onCancel={() => {
-              cancelBatch();
-              setBatchProgress(null);
-            }}
-          />
-        )}
+        {
+          batchProgress && (
+            <BatchProgressModal
+              progress={batchProgress}
+              onCancel={() => {
+                cancelBatch();
+                setBatchProgress(null);
+              }}
+            />
+          )
+        }
       </div>
 
       {/* AI Chat Assistant */}

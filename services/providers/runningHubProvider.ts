@@ -51,7 +51,19 @@ export class RunningHubProvider implements ImageProvider {
         }
     }
 
-    async generateImage(prompt: string, seed: number, aspectRatio: AspectRatio, refImages?: string[]): Promise<string> {
+    async generateImage(
+        prompt: string,
+        options: {
+            seed?: number,
+            aspect_ratio: AspectRatio,
+            image_engine?: string,
+            reference_image_url?: string
+        }
+    ): Promise<{ preview_url: string }> {
+        const seed = options.seed || Math.floor(Math.random() * 1000000);
+        const aspectRatio = options.aspect_ratio;
+        const refImages = options.reference_image_url ? [options.reference_image_url] : [];
+
         return await withRetry(async () => {
             const uploadedUrls: string[] = [];
             if (refImages && refImages.length > 0) {
@@ -89,8 +101,8 @@ export class RunningHubProvider implements ImageProvider {
                 console.log(`[NB2 Debug] Submitting Workflow ${WORKFLOW_ID} with nodes:`, JSON.stringify(nodeInfoList, null, 2));
                 const taskId = await runWorkflow(WORKFLOW_ID, nodeInfoList, this.config);
                 const resultUrl = await pollTask(taskId, this.config, 600000);
-                if (resultUrl.endsWith('.zip')) return await this.extractImageFromZipUrl(resultUrl);
-                return resultUrl;
+                if (resultUrl.endsWith('.zip')) return { preview_url: await this.extractImageFromZipUrl(resultUrl) };
+                return { preview_url: resultUrl };
             }
 
             // Path 2: Qwen (runninghub) or Z-Image
@@ -103,7 +115,8 @@ export class RunningHubProvider implements ImageProvider {
                 { nodeId: "7", fieldName: "height", fieldValue: h.toString() }
             ];
             const taskId = await runWorkflow(targetWorkflow, nodeInfoList, this.config);
-            return await pollTask(taskId, this.config);
+            const resultUrl = await pollTask(taskId, this.config);
+            return { preview_url: resultUrl };
         });
     }
 }
