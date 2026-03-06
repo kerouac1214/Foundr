@@ -35,7 +35,6 @@ export const ASPECT_RATIOS: { label: string; value: AspectRatio }[] = [
 export const IMAGE_ENGINES: { label: string; value: ImageEngine; desc: string }[] = [
     { label: 'NB2 引擎', value: 'nb2', desc: '专业级角色一致性 (默认)' },
     { label: 'RunningHub (Qwen)', value: 'runninghub', desc: '次世代写实模型' },
-    { label: 'Gemini 引擎', value: 'google', desc: '极致光影精度' },
     { label: 'Z-image', value: 'z_image', desc: '资产专属模型' }
 ];
 

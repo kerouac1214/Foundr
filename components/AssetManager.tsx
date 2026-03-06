@@ -124,6 +124,94 @@ const AssetCard: React.FC<{
     );
 };
 
+/* --- DNA Breakdown Component --- */
+
+const DNABreakdown: React.FC<{ dnaString: string }> = ({ dnaString }) => {
+    let dna: any = null;
+    try {
+        dna = JSON.parse(dnaString);
+    } catch (e) {
+        // Not a JSON or invalid
+        return (
+            <div className="bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed whitespace-pre-wrap">
+                {dnaString}
+            </div>
+        );
+    }
+
+    if (!dna || typeof dna !== 'object') return null;
+
+    return (
+        <div className="space-y-4">
+            {/* Identity Consistency Protocol */}
+            {dna.Identity_Consistency_Protocol && (
+                <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-wider">身份一致性协议 (Identity Lock)</span>
+                    </div>
+                    <div className="grid gap-2">
+                        <div className="space-y-1">
+                            <span className="text-[8px] text-zinc-500 uppercase font-bold">目标主体</span>
+                            <p className="text-xs text-zinc-300 leading-relaxed">{dna.Identity_Consistency_Protocol.Target_Subject}</p>
+                        </div>
+                        {dna.Identity_Consistency_Protocol.Core_Elements && (
+                            <div className="space-y-1">
+                                <span className="text-[8px] text-zinc-500 uppercase font-bold">核心要素</span>
+                                <p className="text-xs text-zinc-300 leading-relaxed">{dna.Identity_Consistency_Protocol.Core_Elements}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Visual Style Module */}
+            {dna.Visual_Style_Module && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-wider">视觉风格模块 (Visual Style)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <span className="px-2 py-0.5 bg-blue-400/10 border border-blue-400/30 text-blue-400 text-[9px] rounded-lg">
+                            {dna.Visual_Style_Module.Style_Definition}
+                        </span>
+                        <span className="px-2 py-0.5 bg-white/5 border border-white/10 text-zinc-400 text-[9px] rounded-lg">
+                            {dna.Visual_Style_Module.Rendering_Specifics}
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {/* Master Layout Grid (3-View) */}
+            {dna.Master_Layout_Grid && (
+                <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-wider">三视图参考布局 (3-View Layout)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-black/40 rounded-xl border border-white/5">
+                            <span className="text-[8px] text-zinc-500 uppercase font-bold block mb-1">主视区 (Left Zone)</span>
+                            <p className="text-[9px] text-zinc-400 leading-tight">{dna.Master_Layout_Grid.Left_Zone}</p>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="p-2 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-[8px] text-zinc-500 uppercase font-bold block mb-1">全身参 (Top Right)</span>
+                                <p className="text-[9px] text-zinc-400 leading-tight">{dna.Master_Layout_Grid.Top_Right_Zone}</p>
+                            </div>
+                            <div className="p-2 bg-black/40 rounded-xl border border-white/5">
+                                <span className="text-[8px] text-zinc-500 uppercase font-bold block mb-1">面部参 (Bottom Right)</span>
+                                <p className="text-[9px] text-zinc-400 leading-tight">{dna.Master_Layout_Grid.Bottom_Right_Zone}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const DetailModal: React.FC<{
     asset: any;
     type: 'character' | 'scene';
@@ -158,6 +246,9 @@ const DetailModal: React.FC<{
     isCloning,
     stylePreset
 }) => {
+        // Tab State
+        const [activeTab, setActiveTab] = useState<'overview' | 'dna' | 'advanced'>('overview');
+
         // Prevent body scroll when modal is open
         useEffect(() => {
             document.body.style.overflow = 'hidden';
@@ -222,181 +313,275 @@ const DetailModal: React.FC<{
                             </button>
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">描述</label>
+                        {/* Tabs Navigation */}
+                        <div className="flex items-center gap-6 border-b border-white/5 pb-1">
+                            {[
+                                { id: 'overview', label: '详情概览' },
+                                { id: 'dna', label: '视觉 DNA' },
+                                { id: 'advanced', label: '高级设置' }
+                            ].map(tab => (
                                 <button
-                                    onClick={() => onRefineDNA?.(asset.name, asset.description, type, type === 'character' ? asset.char_id : asset.scene_id)}
-                                    className="text-[9px] font-black uppercase text-[#D4AF37] hover:text-white transition-colors flex items-center gap-1.5 bg-[#D4AF37]/5 px-2.5 py-1 rounded-lg border border-[#D4AF37]/20"
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`pb-3 text-[10px] font-black uppercase tracking-widest transition-all relative ${activeTab === tab.id ? 'text-[#D4AF37]' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 >
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                    提炼视觉 DNA
+                                    {tab.label}
+                                    {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37] animate-in slide-in-from-left-full duration-300" />}
                                 </button>
-                            </div>
-                            <textarea
-                                value={asset.description}
-                                title="Asset Description"
-                                onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { description: e.target.value })}
-                                className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-zinc-300 text-sm leading-relaxed h-32 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
-                            />
+                            ))}
                         </div>
 
-                        {/* Visual DNA */}
-                        <div className="space-y-2">
-                            <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">视觉 DNA (提示词)</label>
-                            <textarea
-                                value={displayPrompt}
-                                title="Visual DNA Prompt"
-                                onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
-                                className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-40 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
-                            />
-                        </div>
-
-                        {/* Reference Images Gallery */}
-                        <div className="pt-8 border-t border-white/5 space-y-6">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">参考图库 / 形象确认</span>
-                                <label className="cursor-pointer bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-[#D4AF37] hover:text-black transition-all">
-                                    <span>上传参考图</span>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
-                                    />
-                                </label>
-                            </div>
-
-                            {/* Confirmed / Active Reference */}
-                            <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl flex items-center gap-4">
-                                <label className="w-16 h-16 rounded-xl bg-zinc-900 border border-white/5 overflow-hidden flex-shrink-0 cursor-pointer hover:border-[#D4AF37]/50 transition-colors group relative">
-                                    {asset.reference_image_url ? (
-                                        <img src={getProxiedUrl(asset.reference_image_url)} className="w-full h-full object-cover" alt="confirmed" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-[20px] transition-transform group-hover:scale-110">📸</div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-opacity">更换</div>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, reader.result as string);
-                                                reader.readAsDataURL(file);
-                                            }
-                                        }}
-                                    />
-                                </label>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="text-[10px] font-black text-white uppercase mb-1">已确认的视觉锚点</h4>
-                                    <p className="text-[9px] text-zinc-500 truncate">{asset.reference_image_url ? '生成时将以此图为核心参考' : '尚未锁定形象，点击图标上传或从库中选择'}</p>
-                                </div>
-                                {asset.reference_image_url && (
-                                    <button
-                                        onClick={() => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { reference_image_url: undefined })}
-                                        className="p-2 text-zinc-600 hover:text-red-400 transition-colors"
-                                        title="清除确认形象"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Gallery Grid */}
-                            <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                {(asset.candidate_reference_images || []).map((imgUrl: string, idx: number) => (
-                                    <div key={idx} className="group relative aspect-square rounded-xl bg-zinc-900 border border-white/5 overflow-hidden">
-                                        <img src={getProxiedUrl(imgUrl)} className="w-full h-full object-cover" alt={`ref-${idx}`} />
-                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1">
+                        {/* Tab Content */}
+                        <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                            {activeTab === 'overview' && (
+                                <div className="space-y-8">
+                                    {/* Description */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">角色描述</label>
                                             <button
-                                                onClick={() => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
-                                                className="p-1.5 bg-[#D4AF37] text-black rounded-lg hover:scale-110 transition-transform"
-                                                title="设为确认形象"
+                                                onClick={() => onRefineDNA?.(asset.name, asset.description, type, type === 'character' ? asset.char_id : asset.scene_id)}
+                                                className="text-[9px] font-black uppercase text-[#D4AF37] hover:text-white transition-colors flex items-center gap-1.5 bg-[#D4AF37]/5 px-2.5 py-1 rounded-lg border border-[#D4AF37]/20"
                                             >
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                            </button>
-                                            <button
-                                                onClick={() => onRemoveReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
-                                                className="p-1.5 bg-red-500/80 text-white rounded-lg hover:scale-110 transition-transform"
-                                                title="删除"
-                                            >
-                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                                提炼视觉 DNA
                                             </button>
                                         </div>
-                                        {imgUrl === asset.reference_image_url && (
-                                            <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37] shadow-[0_0_5px_#D4AF37]" />
-                                        )}
-                                    </div>
-                                ))}
-                                <label className="aspect-square rounded-xl border border-dashed border-zinc-800 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors group">
-                                    <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                    <span className="text-[8px] text-zinc-700 group-hover:text-zinc-500 uppercase font-black">添加</span>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
-                                    />
-                                </label>
-                            </div>
-                        </div>
-
-                        {/* Advanced Prompt Editor */}
-                        <PromptEditor
-                            defaultPrompt={defaultPrompt}
-                            onRegenerate={(p) => onRegenerate(type === 'character' ? asset.char_id : asset.scene_id, p)}
-                            isRendering={isRendering}
-                            label="高级生成设置"
-                        />
-
-                        {/* Voice Cloning (Character Only) */}
-                        {type === 'character' && onUploadAudio && onCloneVoice && (
-                            <div className="pt-8 border-t border-white/5 space-y-4">
-                                <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">声音克隆</span>
-
-                                <div className="flex gap-4">
-                                    <label className="flex-1 cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex flex-col items-center justify-center p-6 transition-all group">
-                                        <input type="file" accept="audio/*" className="hidden" onChange={(e) => onUploadAudio(e, asset.char_id)} />
-                                        <span className="text-zinc-400 text-xs mb-1 group-hover:text-white">参考音频</span>
-                                        {asset.voice_ref_audio_url ? (
-                                            <span className="text-[#D4AF37] text-[10px] font-bold">已上传 ✓</span>
-                                        ) : (
-                                            <span className="text-zinc-600 text-[10px]">上传 mp3/wav</span>
-                                        )}
-                                    </label>
-
-                                    <div className="flex-[2] space-y-2">
                                         <textarea
-                                            value={asset.voice_sample_text || ''}
-                                            title="Voice Sample Text"
-                                            onChange={e => onUpdate(asset.char_id, { voice_sample_text: e.target.value })}
-                                            placeholder="用于声音样本的文字..."
-                                            className="w-full bg-white/5 p-3 rounded-xl border border-white/10 text-xs text-zinc-300 h-[86px] resize-none outline-none"
+                                            value={asset.description}
+                                            title="Asset Description"
+                                            onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { description: e.target.value })}
+                                            className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-zinc-300 text-sm leading-relaxed h-32 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
                                         />
                                     </div>
-                                </div>
 
-                                <div className="flex items-center gap-4">
-                                    <button
-                                        onClick={() => onCloneVoice(asset.char_id, asset.voice_ref_audio_url, asset.voice_sample_text!)}
-                                        disabled={isCloning || !asset.voice_ref_audio_url || !asset.voice_sample_text}
-                                        className="px-6 py-3 bg-[#D4AF37] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-bold uppercase text-xs rounded-xl hover:bg-white transition-colors flex-shrink-0"
-                                    >
-                                        {isCloning ? '克隆中...' : '生成声音'}
-                                    </button>
-                                    {asset.voice_preview_url && <audio controls src={getProxiedUrl(asset.voice_preview_url)} className="h-10 w-full" />}
+                                    {/* Reference Images Gallery */}
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">参考图库 / 形象确认</span>
+                                            <label className="cursor-pointer bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/30 px-3 py-1.5 rounded-lg text-[9px] font-black hover:bg-[#D4AF37] hover:text-black transition-all">
+                                                <span>上传参考图</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    multiple
+                                                    className="hidden"
+                                                    onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
+                                                />
+                                            </label>
+                                        </div>
+
+                                        {/* Confirmed / Active Reference */}
+                                        <div className="p-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl flex items-center gap-4">
+                                            <label className="w-16 h-16 rounded-xl bg-zinc-900 border border-white/5 overflow-hidden flex-shrink-0 cursor-pointer hover:border-[#D4AF37]/50 transition-colors group relative">
+                                                {asset.reference_image_url ? (
+                                                    <img src={getProxiedUrl(asset.reference_image_url)} className="w-full h-full object-cover" alt="confirmed" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[20px] transition-transform group-hover:scale-110">📸</div>
+                                                )}
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white font-bold transition-opacity">更换</div>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const reader = new FileReader();
+                                                            reader.onloadend = () => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, reader.result as string);
+                                                            reader.readAsDataURL(file);
+                                                        }
+                                                    }}
+                                                />
+                                            </label>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-[10px] font-black text-white uppercase mb-1">已确认的视觉锚点</h4>
+                                                <p className="text-[9px] text-zinc-500 truncate">{asset.reference_image_url ? '生成时将以此图为核心参考' : '尚未锁定形象，点击图标上传或从库中选择'}</p>
+                                            </div>
+                                            {asset.reference_image_url && (
+                                                <button
+                                                    onClick={() => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, { reference_image_url: undefined })}
+                                                    className="p-2 text-zinc-600 hover:text-red-400 transition-colors"
+                                                    title="清除确认形象"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Gallery Grid */}
+                                        <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                            {(asset.candidate_reference_images || []).map((imgUrl: string, idx: number) => (
+                                                <div key={idx} className="group relative aspect-square rounded-xl bg-zinc-900 border border-white/5 overflow-hidden">
+                                                    <img src={getProxiedUrl(imgUrl)} className="w-full h-full object-cover" alt={`ref-${idx}`} />
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1">
+                                                        <button
+                                                            onClick={() => onSetAsReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
+                                                            className="p-1.5 bg-[#D4AF37] text-black rounded-lg hover:scale-110 transition-transform"
+                                                            title="设为确认形象"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onRemoveReference?.(type === 'character' ? asset.char_id : asset.scene_id, imgUrl)}
+                                                            className="p-1.5 bg-red-500/80 text-white rounded-lg hover:scale-110 transition-transform"
+                                                            title="删除"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                        </button>
+                                                    </div>
+                                                    {imgUrl === asset.reference_image_url && (
+                                                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D4AF37] shadow-[0_0_5px_#D4AF37]" />
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <label className="aspect-square rounded-xl border border-dashed border-zinc-800 flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors group">
+                                                <svg className="w-4 h-4 text-zinc-700 group-hover:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                                <span className="text-[8px] text-zinc-700 group-hover:text-zinc-500 uppercase font-black">添加</span>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={(e) => onUploadReference?.(e, type === 'character' ? asset.char_id : asset.scene_id)}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+
+                            {activeTab === 'dna' && (
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">结构化 DNA 解析</label>
+                                        <button
+                                            onClick={() => onRefineDNA?.(asset.name, asset.description, type, type === 'character' ? asset.char_id : asset.scene_id)}
+                                            className="text-[9px] font-black text-[#D4AF37] hover:underline"
+                                        >
+                                            重新提炼
+                                        </button>
+                                    </div>
+                                    <DNABreakdown dnaString={displayPrompt} />
+                                </div>
+                            )}
+
+                            {activeTab === 'advanced' && (
+                                <div className="space-y-8">
+                                    {/* Raw Prompt Editor */}
+                                    <div className="space-y-2">
+                                        <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">原始视觉 DNA (提示词协议)</label>
+                                        <textarea
+                                            value={displayPrompt}
+                                            title="Visual DNA Prompt"
+                                            onChange={e => onUpdate(type === 'character' ? asset.char_id : asset.scene_id, type === 'character' ? { consistency_seed_prompt: e.target.value } : { visual_anchor_prompt: e.target.value })}
+                                            className="w-full bg-white/5 p-4 rounded-xl border border-white/5 text-[#D4AF37] text-xs mono leading-relaxed h-60 resize-none outline-none focus:border-[#D4AF37]/30 transition-colors"
+                                        />
+                                    </div>
+
+                                    <PromptEditor
+                                        defaultPrompt={defaultPrompt}
+                                        onRegenerate={(p) => onRegenerate(type === 'character' ? asset.char_id : asset.scene_id, p)}
+                                        isRendering={isRendering}
+                                        label="高级生成设置"
+                                    />
+
+                                    {/* Voice Cloning (Character Only) */}
+                                    {type === 'character' && onUploadAudio && onCloneVoice && (
+                                        <div className="pt-8 border-t border-white/5 space-y-4">
+                                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">声音克隆</span>
+
+                                            <div className="flex gap-4">
+                                                <label className="flex-1 cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex flex-col items-center justify-center p-6 transition-all group">
+                                                    <input type="file" accept="audio/*" className="hidden" onChange={(e) => onUploadAudio(e, asset.char_id)} />
+                                                    <span className="text-zinc-400 text-xs mb-1 group-hover:text-white">参考音频</span>
+                                                    {asset.voice_ref_audio_url ? (
+                                                        <span className="text-[#D4AF37] text-[10px] font-bold">已上传 ✓</span>
+                                                    ) : (
+                                                        <span className="text-zinc-600 text-[10px]">上传 mp3/wav</span>
+                                                    )}
+                                                </label>
+
+                                                <div className="flex-[2] space-y-2">
+                                                    <textarea
+                                                        value={asset.voice_sample_text || ''}
+                                                        title="Voice Sample Text"
+                                                        onChange={e => onUpdate(asset.char_id, { voice_sample_text: e.target.value })}
+                                                        placeholder="用于声音样本的文字..."
+                                                        className="w-full bg-white/5 p-3 rounded-xl border border-white/10 text-xs text-zinc-300 h-[86px] resize-none outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-4">
+                                                <button
+                                                    onClick={() => onCloneVoice(asset.char_id, asset.voice_ref_audio_url, asset.voice_sample_text!)}
+                                                    disabled={isCloning || !asset.voice_ref_audio_url || !asset.voice_sample_text}
+                                                    className="px-6 py-3 bg-[#D4AF37] disabled:bg-zinc-800 disabled:text-zinc-500 text-black font-bold uppercase text-xs rounded-xl hover:bg-white transition-colors flex-shrink-0"
+                                                >
+                                                    {isCloning ? '克隆中...' : '生成声音'}
+                                                </button>
+                                                {asset.voice_preview_url && <audio controls src={getProxiedUrl(asset.voice_preview_url)} className="h-10 w-full" />}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
         );
     };
+
+/* --- Planning Progress Indicator --- */
+
+const PlanningProgressIndicator: React.FC<{ chapters: Chapter[] }> = ({ chapters }) => {
+    const planningChapters = chapters.filter(c => c.is_planning);
+    const plannedChapters = chapters.filter(c => c.storyboard && c.storyboard.length > 0);
+    const totalChapters = chapters.length;
+
+    if (planningChapters.length === 0 && (plannedChapters.length === 0 || plannedChapters.length === totalChapters)) {
+        return null;
+    }
+
+    return (
+        <div className="bg-[#111] border border-white/10 rounded-2xl p-4 mb-8 flex items-center justify-between animate-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-4">
+                <div className="relative">
+                    <div className="w-10 h-10 rounded-full border-2 border-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-500">
+                        {plannedChapters.length}/{totalChapters}
+                    </div>
+                    {planningChapters.length > 0 && (
+                        <div className="absolute inset-0 rounded-full border-2 border-director-accent border-t-transparent animate-spin" />
+                    )}
+                </div>
+                <div>
+                    <h4 className="text-[10px] font-black text-white uppercase tracking-widest">后台分镜规划中</h4>
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase">
+                        {planningChapters.length > 0
+                            ? `正在规划: ${planningChapters[0].title}`
+                            : '所有分集已加入预演队列'}
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+                {chapters.map((c, i) => (
+                    <div
+                        key={c.id}
+                        title={c.title}
+                        className={`w-1.5 h-6 rounded-full transition-all duration-500 ${c.is_planning
+                            ? 'bg-director-accent animate-pulse'
+                            : (c.storyboard && c.storyboard.length > 0)
+                                ? 'bg-emerald-500/50'
+                                : 'bg-zinc-800'
+                            }`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
 
 /* --- Main Component --- */
 
@@ -573,6 +758,9 @@ const AssetManager: React.FC<AssetManagerProps> = ({
 
     return (
         <div className={`space-y-12 animate-in fade-in duration-1000 ${className}`}>
+            {/* Planning Progress Indicator (Background Storyboard Planning) */}
+            <PlanningProgressIndicator chapters={projectMetadata?.chapters || []} />
+
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-white/10 pb-10 gap-6">
                 <div>

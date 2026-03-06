@@ -104,7 +104,7 @@ class CloudScriptProvider implements ScriptProvider {
     }
 }
 
-export const getScriptProvider = (engine: string = 'google'): ScriptProvider => {
+export const getScriptProvider = (engine: string = 'glm5'): ScriptProvider => {
     let localProvider: ScriptProvider;
     if (engine === 'kimi' || engine === 'moonshot') {
         localProvider = kimi;
@@ -127,7 +127,9 @@ export const getImageProvider = (engine: string = 'nb2'): ImageProvider => {
         runningHub.setEngine(engine);
         return runningHub;
     }
-    return gemini;
+    // All photo generation calls RunningHub workflow APIs
+    runningHub.setEngine('nb2');
+    return runningHub;
 };
 
 export const getVideoProvider = (engine: string = 'wan2_2'): VideoProvider => {
@@ -135,7 +137,9 @@ export const getVideoProvider = (engine: string = 'wan2_2'): VideoProvider => {
         runningHubVideo.setEngine(engine);
         return runningHubVideo;
     }
-    return gemini;
+    // All video generation calls RunningHub workflow APIs
+    runningHubVideo.setEngine('wan2_2');
+    return runningHubVideo;
 };
 
 export const updateProviderConfigs = (configs: Record<string, any>) => {

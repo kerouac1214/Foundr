@@ -153,7 +153,7 @@ const AIChatAssistant: React.FC = () => {
                         <div className="flex items-center gap-1.5">
                             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
                             <span className="text-[10px] text-zinc-500 uppercase tracking-widest">
-                                {globalContext.script_engine?.toUpperCase() || 'AI'} ACTIVE
+                                KIMI ACTIVE
                             </span>
                         </div>
                     </div>

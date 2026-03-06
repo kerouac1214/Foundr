@@ -76,9 +76,9 @@ const App: React.FC = () => {
     handleInsertShot,
     handleDeriveShots,
     handleDeriveThreeShots,
-    handleGenerateNarrativeGrid,
     handleRefineShot,
-    handleRefineDNA
+    handleRefineDNA,
+    handleOrchestratedGeneration
   } = useAppWorkflow();
 
   // Local UI State
@@ -184,14 +184,7 @@ const App: React.FC = () => {
             {(activeView === 'context' || activeView === 'episodes') && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    const state = useProjectStore.getState();
-                    if (!state.script) {
-                      useUIStore.getState().showToast('请输入全剧本后再进行架构分析', 'error');
-                      return;
-                    }
-                    handleFullScriptAnalysis();
-                  }}
+                  onClick={() => handleFullScriptAnalysis()}
                   disabled={isAnalyzing}
                   className="px-4 py-1.5 bg-[#4F46E5] hover:bg-[#6366F1] text-white rounded-md text-[10px] font-bold tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
                   title="Step 1：将长剧本切分为章节"
@@ -200,11 +193,11 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
-            {(activeView === 'foundry' || activeView === 'episodes') && (
+            {(activeView === 'episodes') && (
               <button
-                onClick={handleExtractAssets}
+                onClick={() => handleExtractAssets()}
                 disabled={isAnalyzing}
-                className="director-button text-[10px] tracking-widest"
+                className="px-4 py-1.5 bg-[#4F46E5] hover:bg-[#6366F1] text-white rounded-md text-[10px] font-bold tracking-widest transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
                 title="Step 2：从全剧本中提取角色与场景资产"
               >
                 {isAnalyzing ? '提取中...' : '提取资产 (Step 2)'}
@@ -335,9 +328,9 @@ const App: React.FC = () => {
                     context={globalContext}
                     isAnalyzing={isAnalyzing}
                     onBackToScript={() => setActiveView('context')}
+                    onExtractAssets={() => handleExtractAssets()}
                     onGenerateChapter={(chapterId) => {
-                      setSelectedChapterId(chapterId);
-                      handleGenerateStoryboard(chapterId);
+                      handleOrchestratedGeneration(chapterId);
                     }}
                   />
                 )}
@@ -352,7 +345,6 @@ const App: React.FC = () => {
                     onInsertShot={handleInsertShot}
                     onDeriveShot={handleDeriveShots}
                     onDeriveThreeShots={handleDeriveThreeShots}
-                    onGenerateNarrativeGrid={handleGenerateNarrativeGrid}
                     onRefineShot={handleRefineShot}
                     onRenderAll={batchRenderAllPhotos}
                   />
@@ -380,7 +372,6 @@ const App: React.FC = () => {
                         onInsertShot={handleInsertShot}
                         onDeriveShot={handleDeriveShots}
                         onDeriveThreeShots={handleDeriveThreeShots}
-                        onGenerateNarrativeGrid={handleGenerateNarrativeGrid}
                         onRefineShot={handleRefineShot}
                         onRenderAll={activeView === 'images' ? batchRenderAllPhotos : batchRenderAllVideos}
                       />
@@ -446,18 +437,6 @@ const App: React.FC = () => {
                             height: '100%',
                           }}
                           controls
-                          onFrameUpdate={(frame) => {
-                            let cumulativeFrames = 0;
-                            const fps = 30;
-                            for (let i = 0; i < storyboard.length; i++) {
-                              const shotDuration = Math.round((storyboard[i].duration || 3) * fps);
-                              if (frame >= cumulativeFrames && frame < cumulativeFrames + shotDuration) {
-                                if (masterPlayingIdx !== i) setMasterPlayingIdx(i);
-                                break;
-                              }
-                              cumulativeFrames += shotDuration;
-                            }
-                          }}
                         />
                       </div>
                     </div>

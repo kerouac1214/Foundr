@@ -277,25 +277,17 @@ export class Glm5Provider implements ScriptProvider {
                     role: 'system',
                     content: `## 【最高优先级语言规则 - MANDATORY LANGUAGE RULE】
 **严格遵守以下规则，不可违反：**
-- \`description\` 对象内所有字段（\`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`lens_and_aperture\`, \`lighting\`, \`content\`, \`sound_design\`）**必须全部使用中文**。
+- \`description\` 对象内所有字段（\`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`content\`）**必须全部使用中文**。
 - \`lyric_line\` 字段**必须使用中文**。
-- \`ai_prompts.image_generation_prompt\` 和 \`ai_prompts.video_generation_prompt\` **必须使用中文**，描述流畅且具有电影感。
 
 ---
 
-## 影视分镜与 AI 提示词系统 (Storyboard & AI Prompting System)
+## 影视分镜快速拆解系统 (Rapid Storyboard Breakdown System)
 
-### 1. 核心角色 (Role)
-你是一位顶级的电影分镜导演 (Storyboard Director) 和 AI 视频生成专家。你的任务是将剧本转化为工业级的分镜脚本，精确拆解视听语言，并为 AI 图像工具和 AI 视频模型分别提供极其精准的中文生成指令。
+### 1. 核心任务
+你是一位高效的电影执行导演。你的任务是快速将剧本转化为分镜脚本。为了保证生成速度，你只需要提取最核心的视觉与叙事要素。
 
-### 2. 交互逻辑 (Interaction Logic)
-- **视听语言的精确性 (Cinematic Precision)**：明确景别（如：CU, MS, WS, POV）和机位角度。
-- **动作离散化演算法**：任何具有叙事权重的动态瞬间严禁合并在单一分镜中。
-- **提示词双轨制 (Dual-Prompting System)**：
-    - **Image Prompt**：专注画面构图、人物泛化特征、光影、材质、相机参数。
-    - **Video Prompt**：专注画面内物理元素的运动和镜头极其微小的推拉摇移。必须注入物理规律自动推演指令：包含流体动力学、重力与加速度、碰撞与形变、动力学一致性。
-
-### 3. 输出格式
+### 2. 字段规范
 必须严格返回 JSON：
 {
   "metadata": { "bpm": 120, "energy_level": "High", "overall_mood": "Tense" },
@@ -305,37 +297,32 @@ export class Glm5Provider implements ScriptProvider {
       "characters": ["角色ID"],
       "scene": "场景ID",
       "description": {
-        "shot_type": "景别",
-        "camera_angle": "角度",
-        "camera_movement": "运镜",
-        "lens_and_aperture": "焦段与光圈",
-        "lighting": "光影",
-        "content": "内容",
-        "sound_design": "音效"
+        "shot_type": "景别 (如: 全景, 特写, 中景)",
+        "camera_angle": "机位角度 (如: 平视, 仰拍, 俯拍)",
+        "camera_movement": "运镜 (如: 固定, 推, 拉, 摇, 移)",
+        "content": "画面内容详细描述 (必须包含具体的动作、构图细节)"
       },
-      "lyric_line": "台词",
       "ai_prompts": {
-        "image_generation_prompt": "中文生图提示词",
-        "video_generation_prompt": "中文视频提示词 (包含物理仿真指令)"
+        "image_generation_prompt": "基于该分镜画面的详细中文绘画提示词，包含光影、构图、角色神态与环境细节",
+        "video_generation_prompt": "描述画面中动态变化的详细中文提示词，专注动作幅度与物理交互"
       },
-      "script_content": "剧本详细内容原文",
-      "image_description": "画面视觉描述",
-      "dialogue": "角色台词 (若有)",
+      "lyric_line": "台词/对白原文",
+      "script_content": "该分镜对应的剧本原文内容",
+      "image_description": "画面的纯视觉描述",
+      "dialogue": "角色对白",
       "action_state": "角色当前动作状态详细描述",
-      "narrative_function": "叙事功能",
-      "time_coord": "时间坐标",
-      "era_coord": "年代坐标",
-      "date_coord": "日期坐标"
+      "narrative_function": "该镜头的叙事功能或隐喻意义"
     }
   ]
 }
 
-## 强制视觉约束
-严禁拼接、文字、水印。画面必须无边框。`
+## 强制约束
+- \`characters\` 和 \`scene\` 必须引用提供的资产 ID。
+- 必须为每一个镜头生成详细的 \`ai_prompts\`，这对于后续渲染至关重要。`
                 },
                 {
                     role: 'user',
-                    content: `角色资产：\n${charList}\n\n场景资产：\n${sceneList}\n\n剧本：\n${script}\n\n请按分镜拆解并返回 JSON。`
+                    content: `角色资产：\n${charList}\n\n场景资产：\n${sceneList}\n\n剧本：\n${script}\n\n请按核心分镜规则拆解并返回 JSON。`
                 }
             ], true);
             const result = parseJSONRobust(content, { metadata: {}, shots: [] });
@@ -489,16 +476,49 @@ export class Glm5Provider implements ScriptProvider {
     }
 
     async generateImagePrompt(item: StoryboardItem, characters: any[], scene: any | undefined, _env: any | undefined, context: GlobalContext): Promise<string> {
-        const charNames = characters.map(c => c.name).join(', ');
+        // Filter characters actually present in this shot
+        const shotChars = characters.filter(c => item.character_ids?.includes(c.char_id));
+
+        const characterContext = shotChars.length > 0
+            ? shotChars.map(c => {
+                let dna = c.consistency_seed_prompt || c.description || "";
+                // If it's JSON, we want to make sure the AI treats it as a protocol
+                return `【角色: ${c.name}】\n视觉 DNA 协议:\n${dna}`;
+            }).join('\n\n')
+            : "无特定角色";
+
+        const sceneContext = scene ? `【场景: ${scene.name}】\n视觉锚点:\n${scene.visual_anchor_prompt || scene.description || ""}` : "默认场景";
+
         return await withRetry(async () => {
             const content = await this.chat([
                 {
                     role: 'system',
-                    content: `你是一位高级电影摄影师。请编写一段具有电影感的中文生图提示词。必须包含指定的景别 (${item.shot_type}) 和拍摄角度 (${item.camera_angle})。`
+                    content: `你是一位顶级电影摄影师与 AI 提示词架构师。
+你的任务是根据提供的“角色视觉 DNA 协议”和“场景视觉锚点”，编写一段中文生图提示词。
+
+## 严格执行规则：
+1. **身份一致性锁 (Identity Lock)**：必须严格遵循 DNA 中的面部、发型、服装和体态描述。如果 DNA 是 JSON 格式，请深度解析其中的 Identity_Consistency_Protocol。
+2. **视觉宪法 (Visual Constitution)**：必须包含指定的景别 (${item.shot_type})、拍摄角度 (${item.camera_angle}) 和全局视觉风格 (${context.visual_style_preset})。
+3. **物理仿真**：描述光影如何作用于 DNA 中定义的材质（如服装面料、皮肤质感）。
+4. **禁止词**：严禁出现文字、水印、拼接感、多头、肢体畸形。
+
+请直接输出这段用于生图的中文提示词。`
                 },
                 {
                     role: 'user',
-                    content: `画面内容：${item.action_description}\n角色：${charNames}\n场景：${scene?.name || '默认'}\n视觉风格：${context.visual_style_preset}`
+                    content: `## 资产上下文
+${characterContext}
+
+${sceneContext}
+
+## 画面动作描述
+${item.action_description}
+
+## 本镜头要求
+景别：${item.shot_type}
+角度：${item.camera_angle}
+运镜：${item.camera_movement || '静态'}
+`
                 }
             ]);
             return content;

@@ -69,6 +69,12 @@ export const uploadFile = async (
     const UPLOAD_URL = `${apiBase}/openapi/v2/media/upload/binary`;
 
     try {
+        if (!apiKey) {
+            console.error("[RunningHub] No API Key provided for upload!");
+        } else {
+            console.log(`[RunningHub] Uploading ${filename} using API Key: ${apiKey.substring(0, 5)}...`);
+        }
+
         const resp = await fetch(UPLOAD_URL, {
             method: 'POST',
             headers: {
@@ -91,7 +97,6 @@ export const uploadFile = async (
     } catch (e) {
         console.warn("Upload exception:", e);
     }
-
     throw new Error("RunningHub File Upload Failed");
 };
 
@@ -210,7 +215,11 @@ export const runWorkflow = async (workflowId: string, nodeInfoList: NodeInfo[], 
             console.log(`[RunningHub] Run Response:`, JSON.stringify(result));
 
             const taskId = result.taskId || (result.data && result.data.taskId);
-            if (!taskId) throw new Error(`No Task ID in response: ${JSON.stringify(result)}`);
+            if (!taskId) {
+                console.error(`[RunningHub] Task submission failed (code 806?): ${JSON.stringify(result)}`);
+                const errorMsg = result.errorMessage || result.data?.errorMessage || "No Task ID returned";
+                throw new Error(`RunningHub 任务提交失败: ${errorMsg} (Error: ${result.errorCode || 'Unknown'})`);
+            }
             return taskId;
         } catch (e) {
             if (url === endpoints[endpoints.length - 1]) throw e;
@@ -415,3 +424,28 @@ export async function runRhartI2I(prompt: string, imageUrls: string[], aspectRat
     return await pollTask(taskIdResult, config);
 }
 
+
+/**
+ * First and Last Frame to Video generation
+ * Workflow: 2027622896310427649
+ * Nodes: 48 (First Frame), 49 (Last Frame), 56 (Duration), 34 (Prompt)
+ */
+export const runFirstLastFrameVideo = async (params: {
+    prompt: string,
+    firstFrameUrl: string,
+    lastFrameUrl: string,
+    duration: number
+}, config?: RunningHubConfig) => {
+    const WORKFLOW_ID = "2027622896310427649";
+
+    const nodeInfoList: NodeInfo[] = [
+        { nodeId: "48", fieldName: "image", fieldValue: params.firstFrameUrl },
+        { nodeId: "49", fieldName: "image", fieldValue: params.lastFrameUrl },
+        { nodeId: "56", fieldName: "number", fieldValue: params.duration.toString() },
+        { nodeId: "34", fieldName: "text", fieldValue: params.prompt }
+    ];
+
+    console.log(`[RunningHub] Submitting First/Last Frame Video Workflow ${WORKFLOW_ID}`);
+    const taskId = await runWorkflow(WORKFLOW_ID, nodeInfoList, config);
+    return await pollTask(taskId, config, 600000); // 10 min timeout
+};

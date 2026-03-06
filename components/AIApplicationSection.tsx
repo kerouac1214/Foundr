@@ -3,6 +3,7 @@ import NarrativeGridModal from './NarrativeGridModal';
 import ShotAdjustmentModal from './ShotAdjustmentModal';
 import VoiceCloneModal from './VoiceCloneModal';
 import VoiceDesignModal from './VoiceDesignModal';
+import FirstLastFrameModal from './FirstLastFrameModal';
 
 interface AIAppCardProps {
     title: string;
@@ -46,6 +47,7 @@ const AIApplicationSection: React.FC = () => {
     const [showShotAdjustment, setShowShotAdjustment] = useState(false);
     const [showVoiceClone, setShowVoiceClone] = useState(false);
     const [showVoiceDesign, setShowVoiceDesign] = useState(false);
+    const [showFirstLastFrame, setShowFirstLastFrame] = useState(false);
 
     const apps = [
         {
@@ -91,6 +93,18 @@ const AIApplicationSection: React.FC = () => {
                 </svg>
             ),
             onClick: () => setShowVoiceDesign(true)
+        },
+        {
+            id: 'first-last-frame',
+            title: '首尾帧生成视频',
+            description: '通过上传起始与结束画面，由 AI 自动计算补全中间帧，生成具有时空连续性的动态视频转场。',
+            icon: (
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 02 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12h10M12 7l5 5-5 5" />
+                </svg>
+            ),
+            onClick: () => setShowFirstLastFrame(true)
         },
         {
             id: 'role-consistency',
@@ -154,6 +168,11 @@ const AIApplicationSection: React.FC = () => {
             <VoiceDesignModal
                 isOpen={showVoiceDesign}
                 onClose={() => setShowVoiceDesign(false)}
+            />
+
+            <FirstLastFrameModal
+                isOpen={showFirstLastFrame}
+                onClose={() => setShowFirstLastFrame(false)}
             />
         </div>
     );

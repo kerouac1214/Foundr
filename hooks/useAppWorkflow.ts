@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { useProjectStore } from '../store/useProjectStore';
+import { useProjectStore, INITIAL_CONTEXT } from '../store/useProjectStore';
 import { useUIStore } from '../store/useUIStore';
 import {
     forgeSceneDNA,
@@ -24,6 +24,8 @@ import JSZip from 'jszip';
 import { useEffect, useCallback } from 'react';
 
 export const useAppWorkflow = () => {
+    const planningInProgressRef = useRef(false);
+
     // Store Access
     const {
         script,
@@ -41,11 +43,13 @@ export const useAppWorkflow = () => {
         storyboard,
         setSelectedChapterId,
         setScript,
+        updateChapter,
         batchQueue,
         addToBatchQueue,
         updateBatchTask,
         removeFromBatchQueue,
-        clearBatchQueue
+        clearBatchQueue,
+        resetAssetsAndStoryboards
     } = useProjectStore();
 
     const {
@@ -241,6 +245,16 @@ export const useAppWorkflow = () => {
             setIsAnalyzing(true);
             setError(null);
 
+            // Check for cached storyboard in background planning
+            const currentChapter = projectMetadata?.chapters?.find(c => c.id === chapterId);
+            if (currentChapter?.storyboard && currentChapter.storyboard.length > 0) {
+                console.log(`[Storyboard] Using cached background planning for Chapter: ${currentChapter.title}`);
+                setStoryboard(currentChapter.storyboard);
+                setIsAnalyzing(false);
+                setActiveView('storyboard');
+                return;
+            }
+
             // Step 1: Episodic Structuring (Existing logic)
             console.log('[Storyboard] Step 1: Episodic structuring...');
             const episodicData = await handleEpisodicStructuring(targetScript);
@@ -364,8 +378,9 @@ export const useAppWorkflow = () => {
         // not from the hook's potentially stale closure.
         const freshScript = useProjectStore.getState().script;
 
-        if (!freshScript) {
-            showToast('请在此输入完整的全剧本或长小说内容后再点击架构分析', 'error');
+        if (!freshScript || freshScript.trim().length === 0) {
+            console.warn('[Full Analysis] Failed: script is empty or whitespace only.');
+            showToast('未检测到有效剧本内容。请在左侧编辑器中输入全剧本后再点击“全剧架构分析”。', 'error');
             return;
         }
 
@@ -374,6 +389,17 @@ export const useAppWorkflow = () => {
         setSelectedChapterId(null);
 
         try {
+            // CRITICAL: Capture the fresh script before clearing the state
+            const freshScriptForAnalysis = freshScript;
+
+            // Step 0: Clear previous state to prevent pollution
+            console.log('[Full Analysis] Step 0: Resetting project state...');
+            const { resetProject, setScript } = useProjectStore.getState();
+            resetProject();
+
+            // CRITICAL: Restore the script immediately so it doesn't disappear from the editor
+            setScript(freshScriptForAnalysis);
+
             setIsAnalyzing(true);
             setError(null);
             setStatusMessage('Step 1 / 全剧架构分析：正在进行章节切分...');
@@ -381,7 +407,7 @@ export const useAppWorkflow = () => {
 
             // Step 1 ONLY: Partition Chapters
             console.log('[Full Analysis] Step 1: Partitioning Chapters...');
-            const result = await partitionIntoChapters(freshScript, globalContext.script_engine);
+            const result = await partitionIntoChapters(freshScriptForAnalysis, INITIAL_CONTEXT.script_engine);
             const chapters = Array.isArray(result) ? result : [];
 
             console.log('[Full Analysis] Step 1 Result:', chapters.length, 'chapters found');
@@ -429,8 +455,29 @@ export const useAppWorkflow = () => {
         }
     };
 
+    // Orchestrated Generation: Reset -> Extract -> Foundry -> Background Planning
+    const handleOrchestratedGeneration = async (chapterId: string) => {
+        setSelectedChapterId(chapterId);
+
+        console.log('[Orchestrated] User requested fresh storyboard. Resetting all assets and storyboards...');
+
+        // 1. Force reset existing assets and storyboards to ensure absolute consistency
+        resetAssetsAndStoryboards();
+
+        // 2. Always trigger Step 2 extraction as requested by the user, but skip the full background loop
+        console.log('[Orchestrated] Starting fresh Step 2 extraction...');
+        await handleExtractAssets({ skipBackground: true });
+
+        // 3. Move to Foundry as requested
+        setActiveView('foundry');
+
+        // 4. Initiate background planning ONLY for this chapter
+        // Background planning happens silently
+        initiateBackgroundPlanning(chapterId, true);
+    };
+
     // ========== Step 2: Extract & Forge Assets ==========
-    const handleExtractAssets = async () => {
+    const handleExtractAssets = async (options?: { skipBackground?: boolean }) => {
         if (!script) return;
         setIsAnalyzing(true);
         setStatusMessage('Step 2 / 资产提取：正在扫描全剧本提取角色与场景...');
@@ -544,6 +591,83 @@ export const useAppWorkflow = () => {
 
         } catch (err) {
             handleError(err);
+        } finally {
+            // Trigger background planning for all chapters silently if not skipped
+            if (!options?.skipBackground) {
+                initiateBackgroundPlanning();
+            }
+        }
+    };
+
+    const initiateBackgroundPlanning = async (priorityChapterId?: string, onlyThisChapter: boolean = false) => {
+        const metadata = useProjectStore.getState().projectMetadata;
+        if (!metadata || !metadata.chapters || metadata.chapters.length === 0) return;
+
+        // Prevent multiple concurrent planning loops
+        if (planningInProgressRef.current) {
+            console.log('[Background Planning] Loop already running. Priority update ignored but will be picked up.');
+            return;
+        }
+
+        planningInProgressRef.current = true;
+        console.log('[Background Planning] Starting for', metadata.chapters.length, 'chapters', priorityChapterId ? `(Priority: ${priorityChapterId})` : '');
+
+        try {
+            // Create a sorted list based on priority
+            const remainingChapters = onlyThisChapter && priorityChapterId
+                ? metadata.chapters.filter(c => c.id === priorityChapterId)
+                : [...metadata.chapters];
+
+            if (!onlyThisChapter && priorityChapterId) {
+                const pIdx = remainingChapters.findIndex(c => c.id === priorityChapterId);
+                if (pIdx > -1) {
+                    const [priority] = remainingChapters.splice(pIdx, 1);
+                    remainingChapters.unshift(priority);
+                }
+            }
+
+            // Process chapters sequentially in background to avoid overwhelming the API
+            for (const chapter of remainingChapters) {
+                const state = useProjectStore.getState();
+                const liveChapter = state.projectMetadata?.chapters?.find(c => c.id === chapter.id);
+
+                // Skip if already planned or currently planning (unless it's the priority one we just forced)
+                if (!liveChapter || (liveChapter.storyboard && liveChapter.storyboard.length > 0) || liveChapter.is_planning) {
+                    continue;
+                }
+
+                updateChapter(chapter.id, { is_planning: true });
+
+                try {
+                    const targetScript = chapter.content;
+                    const enrichedScript = `[CHAPTER CONTEXT: ${chapter.title}]\nSummary: ${chapter.summary}\n\nScript:\n${targetScript}`;
+
+                    console.log(`[Background Planning] Processing: ${chapter.title}`);
+                    const result = await generateStoryboard(
+                        enrichedScript,
+                        state.globalContext.characters,
+                        state.globalContext.scenes,
+                        state.globalContext.script_engine
+                    );
+
+                    const initial_script = Array.isArray(result?.initial_script) ? result.initial_script : [];
+                    if (initial_script.length > 0) {
+                        updateChapter(chapter.id, {
+                            storyboard: initial_script,
+                            is_planning: false
+                        });
+                        console.log(`[Background Planning] Chapter ${chapter.title} OK: ${initial_script.length} shots`);
+                    } else {
+                        updateChapter(chapter.id, { is_planning: false });
+                    }
+                } catch (err) {
+                    console.error(`[Background Planning] Chapter ${chapter.title} failed:`, err);
+                    updateChapter(chapter.id, { is_planning: false });
+                }
+            }
+        } finally {
+            planningInProgressRef.current = false;
+            console.log('[Background Planning] Completed all chapters.');
         }
     };
 
@@ -1224,6 +1348,8 @@ export const useAppWorkflow = () => {
         handleDeriveThreeShots,
         handleGenerateNarrativeGrid,
         handleRefineShot,
-        handleRefineDNA
+        handleRefineDNA,
+        initiateBackgroundPlanning,
+        handleOrchestratedGeneration
     };
 };

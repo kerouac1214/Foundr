@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useProjectStore } from '../store/useProjectStore';
 import { cloneVoice } from '../services/runningHubService';
 import Toast from './Toast';
 
@@ -8,12 +9,15 @@ interface VoiceCloneModalProps {
 }
 
 const VoiceCloneModal: React.FC<VoiceCloneModalProps> = ({ isOpen, onClose }) => {
+    const { storyboard, updateShot } = useProjectStore();
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const [audioBase64, setAudioBase64] = useState<string | null>(null);
     const [text, setText] = useState('');
+    const [selectedShotId, setSelectedShotId] = useState<string>('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultAudioUrl, setResultAudioUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!isOpen) return null;
@@ -49,6 +53,16 @@ const VoiceCloneModal: React.FC<VoiceCloneModalProps> = ({ isOpen, onClose }) =>
             const audioUrl = await cloneVoice(audioBase64, text);
             if (audioUrl) {
                 setResultAudioUrl(audioUrl);
+
+                // Link to shot if selected
+                if (selectedShotId) {
+                    updateShot(selectedShotId, {
+                        audio_url: audioUrl,
+                        // We don't have exact duration here, but we can set a placeholder or let the user adjust
+                        sound_design: text
+                    });
+                    setSuccess(`已成功关联至 镜头 ${storyboard.find(s => s.id === selectedShotId)?.shot_number}`);
+                }
             } else {
                 throw new Error("生成音频失败，未返回有效地址");
             }
@@ -123,6 +137,23 @@ const VoiceCloneModal: React.FC<VoiceCloneModalProps> = ({ isOpen, onClose }) =>
                                     className="w-full h-40 bg-[#121212] border border-white/10 rounded-3xl p-6 text-white text-sm font-medium focus:outline-none focus:border-[#D4AF37] transition-all resize-none shadow-inner"
                                     title="输入转换文本"
                                 />
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="text-xs font-black text-zinc-500 uppercase tracking-[0.2em] serif">3. 关联至分镜 (Link to Shot - 可选)</label>
+                                <select
+                                    value={selectedShotId}
+                                    onChange={(e) => setSelectedShotId(e.target.value)}
+                                    title="关联至分镜"
+                                    className="w-full bg-[#121212] border border-white/10 rounded-2xl p-4 text-white font-bold focus:outline-none focus:border-[#D4AF37] transition-all cursor-pointer"
+                                >
+                                    <option value="">不关联 (仅预览/下载)</option>
+                                    {storyboard.map(shot => (
+                                        <option key={shot.id} value={shot.id}>
+                                            镜头 {shot.shot_number}: {shot.visual_content || shot.action_description.substring(0, 20)}...
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
                             <button
@@ -200,6 +231,7 @@ const VoiceCloneModal: React.FC<VoiceCloneModalProps> = ({ isOpen, onClose }) =>
             </div>
 
             {error && <Toast message={error} type="error" onClose={() => setError(null)} />}
+            {success && <Toast message={success} type="success" onClose={() => setSuccess(null)} />}
 
             <style>{`
                 @keyframes wave {

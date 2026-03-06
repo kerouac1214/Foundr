@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import { getScriptProvider } from '../services/providers';
 import Toast from './Toast';
+import { StoryboardImagePicker } from './StoryboardImagePicker';
 
 interface NarrativeGridModalProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ const NarrativeGridModal: React.FC<NarrativeGridModalProps> = ({ isOpen, onClose
     const [result, setResult] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'keyframes' | 'grid'>('overview');
     const [error, setError] = useState<string | null>(null);
+    const [showStoryboardPicker, setShowStoryboardPicker] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!isOpen) return null;
@@ -83,7 +85,27 @@ const NarrativeGridModal: React.FC<NarrativeGridModalProps> = ({ isOpen, onClose
                     {!result ? (
                         <div className="flex-grow p-12 overflow-y-auto space-y-8">
                             <div className="space-y-4">
-                                <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider">上传视觉参考图 (Visual Reference)</label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-bold text-zinc-400 uppercase tracking-wider">上传视觉参考图 (Visual Reference)</label>
+                                    <button
+                                        onClick={() => setShowStoryboardPicker(true)}
+                                        className="text-[10px] font-black uppercase tracking-widest text-[#D4AF37] hover:text-white transition-colors"
+                                        title="从项目库选择"
+                                    >
+                                        从项目库选择
+                                    </button>
+                                </div>
+
+                                {showStoryboardPicker && (
+                                    <StoryboardImagePicker
+                                        onSelect={(url) => {
+                                            setReferenceImage(url);
+                                            setShowStoryboardPicker(false);
+                                        }}
+                                        onClose={() => setShowStoryboardPicker(false)}
+                                    />
+                                )}
+
                                 <div
                                     onClick={() => fileInputRef.current?.click()}
                                     className={`aspect-video rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center overflow-hidden group

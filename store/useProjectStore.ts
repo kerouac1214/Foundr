@@ -36,9 +36,11 @@ interface ProjectState {
     insertShotAt: (index: number, shot: StoryboardItem) => void;
     insertShotsBatch: (index: number, shots: StoryboardItem[]) => void;
     toggleSceneReferenceLock: (sceneId: string) => void;
+    updateChapter: (chapterId: string, updates: Partial<import('../types').Chapter>) => void;
     updateChapterContent: (chapterId: string, content: string) => void;
     deleteShotImage: (shotId: string, url: string) => void;
     setShotPreviewImage: (shotId: string, url: string, lock?: boolean) => void;
+    resetAssetsAndStoryboards: () => void;
 
     // Chapter Selection
     selectedChapterId: string | null;
@@ -67,7 +69,7 @@ interface ProjectState {
     deleteCloudProject: (id: string) => Promise<void>;
 }
 
-const INITIAL_CONTEXT: GlobalContext = {
+export const INITIAL_CONTEXT: GlobalContext = {
     style_package: "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, shot on ARRI Alexa 65, realistic skin pores, natural lighting",
     visual_style_preset: "Hyper-realistic cinematic photography, Live-action film still, 8k RAW photo, shot on ARRI Alexa 65, realistic skin pores, natural lighting",
     visual_style_category: 'cinematic',
@@ -82,13 +84,20 @@ const INITIAL_CONTEXT: GlobalContext = {
     engine_configs: {
         glm5: {
             enable_thinking: true
-        } as any
-    }
+        },
+        kimi: {
+            api_key: ''
+        },
+        runninghub: {
+            api_key: '',
+            api_base: ''
+        }
+    } as any
 };
 
 export const useProjectStore = create<ProjectState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             script: '',
             setScript: (script) => {
                 console.log('Zustand: setScript called, length:', script.length);
@@ -175,16 +184,18 @@ export const useProjectStore = create<ProjectState>()(
                 }
             })),
 
+            updateChapter: (chapterId, updates) => set((state) => ({
+                projectMetadata: state.projectMetadata ? {
+                    ...state.projectMetadata,
+                    chapters: state.projectMetadata.chapters?.map((c) =>
+                        c.id === chapterId ? { ...c, ...updates } : c
+                    )
+                } : null
+            })),
+
             updateChapterContent: (chapterId, content) => {
                 console.log('Zustand: updateChapterContent called, id:', chapterId, 'length:', content.length);
-                set((state) => ({
-                    projectMetadata: state.projectMetadata ? {
-                        ...state.projectMetadata,
-                        chapters: state.projectMetadata.chapters?.map((c) =>
-                            c.id === chapterId ? { ...c, content } : c
-                        )
-                    } : null
-                }));
+                get().updateChapter(chapterId, { content });
             },
 
             deleteShotImage: (shotId, url) => set((state) => ({
@@ -222,6 +233,23 @@ export const useProjectStore = create<ProjectState>()(
                 selectedChapterId: null,
                 batchQueue: []
             }),
+
+            resetAssetsAndStoryboards: () => set((state) => ({
+                globalContext: {
+                    ...state.globalContext,
+                    characters: [],
+                    scenes: []
+                },
+                storyboard: [],
+                projectMetadata: state.projectMetadata ? {
+                    ...state.projectMetadata,
+                    chapters: state.projectMetadata.chapters?.map(c => ({
+                        ...c,
+                        storyboard: [],
+                        is_planning: false
+                    }))
+                } : null
+            })),
 
             addCharacter: (name) => {
                 const id = generateId();

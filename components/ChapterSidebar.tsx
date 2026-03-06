@@ -30,8 +30,8 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
                         key={chapter.id}
                         onClick={() => onSelectChapter(chapter.id)}
                         className={`group p-3 rounded-xl border transition-all cursor-pointer ${selectedChapterId === chapter.id
-                                ? 'bg-director-accent/10 border-director-accent/40'
-                                : 'border-transparent hover:bg-white/5'
+                            ? 'bg-director-accent/10 border-director-accent/40'
+                            : 'border-transparent hover:bg-white/5'
                             }`}
                     >
                         <div className="flex items-start justify-between gap-2">
@@ -52,11 +52,27 @@ const ChapterSidebar: React.FC<ChapterSidebarProps> = ({
                                     e.stopPropagation();
                                     onGenerateChapter(chapter.id);
                                 }}
-                                disabled={isAnalyzing}
-                                className="mt-3 w-full py-1.5 bg-director-accent hover:bg-blue-400 disabled:opacity-50 text-black text-[9px] font-black uppercase tracking-tighter rounded-lg transition-all shadow-lg shadow-blue-500/10"
+                                disabled={isAnalyzing || chapter.is_planning}
+                                className={`mt-3 w-full py-1.5 rounded-lg transition-all shadow-lg text-[9px] font-black uppercase tracking-tighter ${chapter.storyboard && chapter.storyboard.length > 0
+                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 shadow-emerald-500/5'
+                                        : 'bg-director-accent hover:bg-blue-400 text-black shadow-blue-500/10'
+                                    }`}
                             >
-                                {isAnalyzing ? '正在规划...' : '规划此章节分镜'}
+                                {isAnalyzing ? '正在规划...' : (
+                                    chapter.is_planning ? (
+                                        <div className="flex items-center justify-center gap-2">
+                                            <div className="w-2 h-2 border border-black/20 border-t-black rounded-full animate-spin" />
+                                            <span>后台规划中...</span>
+                                        </div>
+                                    ) : (chapter.storyboard && chapter.storyboard.length > 0 ? '重新规划分镜' : '规划此章节分镜')
+                                )}
                             </button>
+                        )}
+                        {!selectedChapterId && chapter.is_planning && (
+                            <div className="mt-2 flex items-center gap-2 px-1">
+                                <div className="w-1.5 h-1.5 bg-director-accent rounded-full animate-pulse shadow-[0_0_8px_rgba(30,144,255,0.8)]" />
+                                <span className="text-[8px] text-director-accent/60 font-bold uppercase tracking-widest">后台规划中...</span>
+                            </div>
                         )}
                     </div>
                 ))}

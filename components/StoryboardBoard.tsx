@@ -3,7 +3,6 @@ import { useProjectStore } from '../store/useProjectStore';
 import StoryboardCard from './StoryboardCard';
 import { StoryboardItem, GlobalContext } from '../types';
 import { VIDEO_ENGINES, SHOT_TYPES, CAMERA_MOVEMENTS, COMPOSITION_SHOTS, CAMERA_ANGLES } from '../constants';
-import NarrativeGridModal from './NarrativeGridModal';
 
 interface StoryboardBoardProps {
     className?: string;
@@ -16,7 +15,6 @@ interface StoryboardBoardProps {
     onInsertShot: (index: number, description: string) => Promise<void>;
     onDeriveShot: (item: StoryboardItem) => Promise<void>;
     onDeriveThreeShots: (item: StoryboardItem, userPrompt?: string) => Promise<void>;
-    onGenerateNarrativeGrid: (item: StoryboardItem) => Promise<void>;
     onRefineShot: (item: StoryboardItem, prompt: string) => Promise<void>;
     onRenderAll?: () => void;
 }
@@ -32,7 +30,6 @@ const ShotDetailModal: React.FC<{
     onRenderCandidates: () => Promise<void>;
     onRenderVideo: () => Promise<void>;
     onDeriveThreeShots: () => Promise<void>;
-    onGenerateNarrativeGrid: () => Promise<void>;
     onRefineShot: (prompt: string) => Promise<void>;
     allItems: StoryboardItem[];
     onNavigate: (item: StoryboardItem) => void;
@@ -48,7 +45,6 @@ const ShotDetailModal: React.FC<{
     onRenderCandidates,
     onRenderVideo,
     onDeriveThreeShots,
-    onGenerateNarrativeGrid,
     onRefineShot,
     allItems,
     onNavigate,
@@ -562,7 +558,6 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
     onInsertShot,
     onDeriveShot,
     onDeriveThreeShots,
-    onGenerateNarrativeGrid,
     onRefineShot,
     onRenderAll
 }) => {
@@ -570,11 +565,10 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
     const [selectedItem, setSelectedItem] = useState<StoryboardItem | null>(null);
     const [trinityAnchor, setTrinityAnchor] = useState<StoryboardItem | null>(null);
     const [insertAnchor, setInsertAnchor] = useState<number | null>(null);
-    const [showNarrativeGrid, setShowNarrativeGrid] = useState(false);
 
     // Function to handle rendering within modal context
     // We need to pass the index of the CURRENT selected shot
-    const handleRenderCurrent = async (item: StoryboardItem, type: 'photo' | 'candidates' | 'video' | 'derive_trinity' | 'narrative_grid' | 'refine') => {
+    const handleRenderCurrent = async (item: StoryboardItem, type: 'photo' | 'candidates' | 'video' | 'derive_trinity' | 'refine') => {
         const idx = storyboard.findIndex(s => s.id === item.id);
         if (idx === -1) return;
         if (type === 'photo') await onRenderPhoto(idx);
@@ -582,9 +576,8 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
         if (type === 'video') await onRenderVideo(idx);
     };
 
-    const handleAdvancedTool = async (item: StoryboardItem, type: 'derive_trinity' | 'narrative_grid' | 'refine', payload?: string) => {
+    const handleAdvancedTool = async (item: StoryboardItem, type: 'derive_trinity' | 'refine', payload?: string) => {
         if (type === 'derive_trinity') setTrinityAnchor(item);
-        if (type === 'narrative_grid') await onGenerateNarrativeGrid(item);
         if (type === 'refine' && payload) await onRefineShot(item, payload);
     };
 
@@ -606,15 +599,6 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                         {viewMode === 'videos_only' ? '一键生成所有视频 (并发: 3)' : '一键生成所有分镜 (并发: 3)'}
                     </button>
                 )}
-                <button
-                    onClick={() => setShowNarrativeGrid(true)}
-                    className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-full text-[10px] font-black tracking-widest uppercase transition-all flex items-center gap-2 ml-3 shadow-lg"
-                >
-                    <svg className="w-4 h-4 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                    </svg>
-                    九宫格电影叙事 (9-Grid Narrative)
-                </button>
             </div>
 
             {/* Board Container */}
@@ -703,7 +687,6 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                     onRenderCandidates={() => handleRenderCurrent(selectedItem, 'candidates')}
                     onRenderVideo={() => handleRenderCurrent(selectedItem, 'video')}
                     onDeriveThreeShots={() => handleAdvancedTool(selectedItem, 'derive_trinity')}
-                    onGenerateNarrativeGrid={() => handleAdvancedTool(selectedItem, 'narrative_grid')}
                     onRefineShot={(p) => handleAdvancedTool(selectedItem, 'refine', p)}
                     allItems={storyboard}
                     onNavigate={setSelectedItem}
@@ -712,11 +695,6 @@ const StoryboardBoard: React.FC<StoryboardBoardProps> = ({
                     viewMode={viewMode}
                 />
             )}
-
-            <NarrativeGridModal
-                isOpen={showNarrativeGrid}
-                onClose={() => setShowNarrativeGrid(false)}
-            />
         </div>
     );
 };

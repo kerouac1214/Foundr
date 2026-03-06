@@ -5,6 +5,7 @@ interface EpisodeDashboardProps {
     metadata: ProjectMetadata | null;
     context: GlobalContext;
     onGenerateChapter: (chapterId: string) => void;
+    onExtractAssets: () => void;
     isAnalyzing: boolean;
     onBackToScript: () => void;
 }
@@ -13,6 +14,7 @@ const EpisodeDashboard: React.FC<EpisodeDashboardProps> = ({
     metadata,
     context,
     onGenerateChapter,
+    onExtractAssets,
     isAnalyzing,
     onBackToScript
 }) => {
@@ -22,9 +24,29 @@ const EpisodeDashboard: React.FC<EpisodeDashboardProps> = ({
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* === Section 1: Script Analysis Stats === */}
             <div>
-                <div className="flex items-center gap-3 mb-5">
-                    <div className="w-1.5 h-4 rounded-full bg-director-accent" />
-                    <h2 className="text-sm font-black tracking-widest uppercase text-white">剧本分析结果</h2>
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-4 rounded-full bg-director-accent" />
+                        <h2 className="text-sm font-black tracking-widest uppercase text-white">剧本分析结果</h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {context.characters.length > 0 && chapters.some(c => c.is_planning) && (
+                            <div className="flex items-center gap-2 mr-4">
+                                <div className="w-2 h-2 bg-director-accent rounded-full animate-pulse shadow-[0_0_8px_rgba(30,144,255,0.6)]" />
+                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">后台分镜规划中...</span>
+                            </div>
+                        )}
+                        <button
+                            onClick={onExtractAssets}
+                            disabled={isAnalyzing}
+                            className="px-6 py-2.5 bg-[#4F46E5] hover:bg-[#6366F1] text-white rounded-md text-[11px] font-black tracking-widest uppercase disabled:opacity-50 transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                            </svg>
+                            提取资产 (Step 2)
+                        </button>
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     {[
@@ -136,6 +158,12 @@ const EpisodeDashboard: React.FC<EpisodeDashboardProps> = ({
                                         <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed line-clamp-3">
                                             {chapter.summary}
                                         </p>
+                                    )}
+                                    {chapter.is_planning && (
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 bg-director-accent rounded-full animate-pulse shadow-[0_0_5px_rgba(30,144,255,0.5)]" />
+                                            <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">后台规划中...</span>
+                                        </div>
                                     )}
                                 </div>
 

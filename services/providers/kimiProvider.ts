@@ -451,88 +451,55 @@ content 是剧本原文的**完整拷贝**，不是摘要。
                     role: 'system',
                     content: `## 【最高优先级语言规则 - MANDATORY LANGUAGE RULE】
 **严格遵守以下规则，不可违反：**
-- \`description\` 对象内所有字段（\`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`lens_and_aperture\`, \`lighting\`, \`content\`, \`sound_design\`）**必须全部使用中文**。
+- \`description\` 对象内所有字段（\`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`content\`）**必须全部使用中文**。
 - \`lyric_line\` 字段**必须使用中文**。
-- \`ai_prompts.image_generation_prompt\` 和 \`ai_prompts.video_generation_prompt\` **必须使用中文**，描述流畅且具有电影感。
 
 ---
 
-## 影视分镜与 AI 提示词系统 (Storyboard & AI Prompting System)
+## 影视分镜快速拆解系统 (Rapid Storyboard Breakdown System)
 
-### 1. 核心角色 (Role)
-你是一位顶级的**电影分镜导演 (Storyboard Director)** 和 **AI 视频生成专家**。你的任务是将剧本转化为工业级的分镜脚本，精确拆解视听语言，并为 AI 图像工具和 AI 视频模型分别提供极其精准的中文生成指令。
+### 1. 核心任务
+你是一位高效的电影执行导演。你的任务是快速将剧本转化为分镜脚本。为了保证生成速度，你只需要提取最核心的视觉与叙事要素。
 
-### 2. 拆解准则 (Deconstruction Rules)
-- **视听语言的精确性 (Cinematic Precision)**：明确景别（如：CU, MS, WS, POV）和机位角度（如：Eye-level, Low-angle, High-angle）。
-- **动作离散化演算法 (Action Decomposition & Temporal Discretization)**：
-  - **任何具有叙事权重的动态瞬间（如：进门、摔倒、开火、反应）严禁合并在单一分镜中。**
-  - 你必须按照“预备 (Anticipation) -> 接触/核心 (Contact/Core) -> 结果/反应 (Result/Reaction)”的逻辑至少拆解为 3 个分镜。
-  - **黄金案例 (The Gold Standard)**：
-    - 剧本：女主下车时不慎崴脚摔倒。
-    - 拆解分镜 1：【中景/MS】镜头对准车门打开，女主的一只脚踏出车外（预备）。
-    - 拆解分镜 2：【特写/CU/极低角度】脚踝扭曲的瞬间，高跟鞋跟断裂触地（核心接触）。
-    - 拆解分镜 3：【全景/WS】女主跌坐在地上，手撑着草坪，痛苦地看着车内（结果/反应）。
-- **光圈与景深优先 (Aperture & Depth of Field)**：静态帧必须设定焦段和光圈（如：50mm f/1.8 浅景深，或 24mm f/8 极深景深），严禁在图像生成提示词中出现“运镜”指令。
-- **AI 去描述化原则 (AI Prompt Generalization)**：在提示词中，绝对禁止使用角色的具体名字。将剧中人物替换为泛化词汇（如：A 32yo man, A blond 25yo woman）。
-- **强制视觉约束 (Mandatory Constraints)**：严禁使用任何形式的拼接图、多面板、九宫格、分屏或对比图。画面必须是无边框的，不能有画框或留白边缘。图像中绝对不能包含任何文字、字母、排版、标志、水印或海报元素（绿色的二进制代码必须作为视觉粒子特效融入画面，而不能作为排版文字覆盖在图片上）。
-- **提示词双轨制 (Dual-Prompting System)**：
-    - **Image Prompt**：专注画面构图、人物泛化特征、光影、材质、相机参数与胶片质感。
-    - **Video Prompt**：专注画面内物理元素的运动和镜头极其微小的推拉摇移。你必须在视频提示词中注入物理规律自动推演指令，包含：
-        *   **流体动力学 (Fluid Dynamics)**：如液体流动、烟雾扩散的真实感。
-        *   **重力与加速度 (Gravity & Acceleration)**：物体下落、抛物线的物理真实性。
-        *   **碰撞与形变 (Collision & Deformation)**：物体接触时的碰撞反馈、软体形变效果。
-        *   **动力学一致性 (Kinetic Consistency)**：确保运动符合真实世界物理常数。
-
-### 3. 可选资产 (Available Assets)
-- **Characters**: [${charContext}]
-- **Scenes**: [${sceneContext}]
-
-### 4. 输出格式与语言要求 (Output & Language Requirements)
-- **分镜数量限制**：每次请求最多输出 **12 个** shots，超出部分省略，以确保完整的 JSON 输出。
-- **语言强制**：返回的 JSON 中，\`description\` 对象内的所有字段（\`content\`, \`shot_type\`, \`camera_angle\`, 等）以及 \`lyric_line\` **必须全部使用中文**表达。\`ai_prompts\` 也必须使用中文。
-必须严格返回标准的 JSON 格式：
+### 2. 字段规范
+必须严格返回 JSON：
 {
-  "metadata": { "bpm": 120, "energy_level": "High", "overall_mood": "Tense", "transitions": [] },
-  "episode": 1,
+  "metadata": { "bpm": 120, "energy_level": "High", "overall_mood": "Tense" },
   "shots": [
     {
       "shot_number": 1,
       "characters": ["角色ID"],
       "scene": "场景ID",
       "description": {
-        "shot_type": "景别",
-        "camera_angle": "机位角度",
-        "camera_movement": "运镜",
-        "lens_and_aperture": "焦段与光圈",
-        "lighting": "光影设定",
-        "content": "画面内容描述",
-        "sound_design": "音效设计"
+        "shot_type": "景别 (如: 全景, 特写, 中景)",
+        "camera_angle": "机位角度 (如: 平视, 仰拍, 俯拍)",
+        "camera_movement": "运镜 (如: 固定, 推, 拉, 摇, 移)",
+        "content": "画面内容详细描述 (必须包含具体的动作、构图细节)"
       },
-      "lyric_line": "台词 (分镜对应部分)",
       "ai_prompts": {
-        "image_generation_prompt": "中文自然语言静态提示词",
-        "video_generation_prompt": "中文自然语言动态提示词 (包含物理仿真指令)"
+        "image_generation_prompt": "基于该分镜画面的详细中文绘画提示词，包含光影、构图、角色神态与环境细节",
+        "video_generation_prompt": "描述画面中动态变化的详细中文提示词，专注动作幅度与物理交互"
       },
-      "script_content": "剧本详细内容原文",
-      "image_description": "画面视觉描述",
-      "dialogue": "角色台词 (若有)",
+      "lyric_line": "台词/对白原文",
+      "script_content": "该分镜对应的剧本原文内容",
+      "image_description": "画面的纯视觉描述",
+      "dialogue": "角色对白",
       "action_state": "角色当前动作状态详细描述",
-      "narrative_function": "该镜头的叙事功能或隐喻意义",
-      "time_coord": "时间坐标 (如: 夜晚)",
-      "era_coord": "年代坐标 (如: 现代)",
-      "date_coord": "日期坐标 (如: 普通工作日)"
+      "narrative_function": "该镜头的叙事功能或隐喻意义"
     }
   ]
-}`
+}
+
+## 强制约束
+- \`characters\` 和 \`scene\` 必须引用提供的资产 ID。
+- 必须为每一个镜头生成详细的 \`ai_prompts\`，这对于后续渲染至关重要。`
                 },
                 {
                     role: 'user',
-                    content: `请根据以下剧本解析分镜：
-                    ---
-                    ${script}
-                    ---`
+                    content: `角色资产：\n${charContext}\n\n场景资产：\n${sceneContext}\n\n剧本：\n${script}\n\n请按核心分镜规则拆解并返回 JSON。`
                 }
             ], true);
+
             const result = parseJSONRobust(content, { metadata: {}, shots: [] });
 
             const metadata: ProjectMetadata = {

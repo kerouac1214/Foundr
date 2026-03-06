@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 import { getImageProvider } from '../services/providers';
 import Toast from './Toast';
+import { StoryboardImagePicker } from './StoryboardImagePicker';
+import { StoryboardItem } from '../types';
 
 interface ShotAdjustmentModalProps {
     isOpen: boolean;
@@ -30,7 +32,9 @@ const ShotAdjustmentModal: React.FC<ShotAdjustmentModalProps> = ({ isOpen, onClo
     const [isGenerating, setIsGenerating] = useState(false);
     const [resultImage, setResultImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showGallery, setShowGallery] = useState(false);
+    const [showStoryboardPicker, setShowStoryboardPicker] = useState(false);
+    const [basePrompt, setBasePrompt] = useState<string>('');
+    const [finalPrompt, setFinalPrompt] = useState<string>(PRESETS[0].value);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     if (!isOpen) return null;
@@ -41,10 +45,42 @@ const ShotAdjustmentModal: React.FC<ShotAdjustmentModalProps> = ({ isOpen, onClo
             const reader = new FileReader();
             reader.onloadend = () => {
                 setSourceImage(reader.result as string);
+                setBasePrompt('');
+                setFinalPrompt(selectedPreset);
                 setResultImage(null);
             };
             reader.readAsDataURL(file);
         }
+    };
+
+    const handleSelectFromStoryboard = (url: string, shot: StoryboardItem) => {
+        setSourceImage(url);
+        const originalPrompt = shot.image_prompt || shot.ai_prompts?.image_generation_prompt || '';
+        setBasePrompt(originalPrompt);
+
+        // Merge with current preset
+        const merged = mergePrompts(originalPrompt, selectedPreset);
+        setFinalPrompt(merged);
+
+        setResultImage(null);
+        setShowStoryboardPicker(false);
+    };
+
+    const mergePrompts = (base: string, preset: string) => {
+        if (!base) return preset;
+
+        // Simple logic: Remove common camera keywords from base and prepend/append preset
+        // For a more advanced version, we could use NLP or Regex
+        const cameraKeywords = /high angle|low angle|wide angle|close up|bird eye view|top-down|panoramic/gi;
+        const cleanedBase = base.replace(cameraKeywords, '').replace(/,,/g, ',').trim();
+
+        return `${preset}, ${cleanedBase}`;
+    };
+
+    const handlePresetChange = (presetValue: string) => {
+        setSelectedPreset(presetValue);
+        const merged = mergePrompts(basePrompt, presetValue);
+        setFinalPrompt(merged);
     };
 
     const handleGenerate = async () => {
@@ -63,8 +99,8 @@ const ShotAdjustmentModal: React.FC<ShotAdjustmentModalProps> = ({ isOpen, onClo
             }
 
             // In our system, Im2Im usually involves passing the source image and a prompt
-            // We'll use the selected preset as the prompt
-            const result = await provider.generateImage(selectedPreset, {
+            // We'll use the merged finalPrompt
+            const result = await provider.generateImage(finalPrompt, {
                 aspect_ratio: globalContext.aspect_ratio || '16:9',
                 image_engine: 'nb2',
                 reference_image_url: sourceImage // Passing reference image
@@ -115,33 +151,19 @@ const ShotAdjustmentModal: React.FC<ShotAdjustmentModalProps> = ({ isOpen, onClo
                             <div className="flex items-center justify-between">
                                 <label className="text-sm font-bold text-zinc-400 uppercase tracking-widest serif">输入图 (Source Image)</label>
                                 <button
-                                    onClick={() => setShowGallery(!showGallery)}
+                                    onClick={() => setShowStoryboardPicker(true)}
                                     className="text-[10px] font-black uppercase tracking-widest text-[#D4AF37] hover:text-white transition-colors"
-                                    title={showGallery ? '隐藏库' : '从项目库选择'}
+                                    title="从项目库选择"
                                 >
-                                    {showGallery ? '隐藏库' : '从项目库选择'}
+                                    从项目库选择
                                 </button>
                             </div>
 
-                            {showGallery && (
-                                <div className="grid grid-cols-4 gap-2 p-4 bg-white/5 rounded-2xl border border-white/5 max-h-40 overflow-y-auto animate-in slide-in-from-top-4 duration-300">
-                                    {storyboardImages.map((img, idx) => (
-                                        <div
-                                            key={idx}
-                                            onClick={() => {
-                                                setSourceImage(img);
-                                                setResultImage(null);
-                                                setShowGallery(false);
-                                            }}
-                                            className="aspect-square rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#D4AF37] transition-all"
-                                        >
-                                            <img src={img} alt={`Storyboard ${idx}`} className="w-full h-full object-cover" />
-                                        </div>
-                                    ))}
-                                    {storyboardImages.length === 0 && (
-                                        <div className="col-span-4 py-8 text-center text-zinc-600 text-[10px] uppercase font-bold tracking-widest">项目库中暂无图片</div>
-                                    )}
-                                </div>
+                            {showStoryboardPicker && (
+                                <StoryboardImagePicker
+                                    onSelect={handleSelectFromStoryboard}
+                                    onClose={() => setShowStoryboardPicker(false)}
+                                />
                             )}
 
                             <div
@@ -176,7 +198,7 @@ const ShotAdjustmentModal: React.FC<ShotAdjustmentModalProps> = ({ isOpen, onClo
                                 <select
                                     id="shot-preset-select"
                                     value={selectedPreset}
-                                    onChange={(e) => setSelectedPreset(e.target.value)}
+                                    onChange={(e) => handlePresetChange(e.target.value)}
                                     title="选择景别预设"
                                     className="w-full bg-[#121212] border border-white/10 rounded-2xl p-4 text-white font-bold focus:outline-none focus:border-[#D4AF37] transition-all cursor-pointer"
                                 >
@@ -184,6 +206,17 @@ const ShotAdjustmentModal: React.FC<ShotAdjustmentModalProps> = ({ isOpen, onClo
                                         <option key={idx} value={p.value}>{p.label}</option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="text-sm font-bold text-zinc-400 uppercase tracking-widest serif">最终提示词 (Final Prompt)</label>
+                                <textarea
+                                    value={finalPrompt}
+                                    onChange={(e) => setFinalPrompt(e.target.value)}
+                                    rows={3}
+                                    className="w-full bg-[#121212] border border-white/10 rounded-2xl p-4 text-white text-xs font-medium focus:outline-none focus:border-[#D4AF37] transition-all resize-none"
+                                    placeholder="最终生成的提示词..."
+                                />
                             </div>
 
                             <button

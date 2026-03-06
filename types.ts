@@ -64,6 +64,8 @@ export interface Chapter {
   summary: string;
   content: string;
   episode_ids: number[]; // References to Episode IDs within this chapter
+  storyboard?: StoryboardItem[]; // Cached background planning result
+  is_planning?: boolean; // Background planning status
 }
 export type AspectRatio = '16:9' | '9:16' | '4:3' | '1:1';
 export type AIEngine = 'google' | 'runninghub' | 'modelscope' | 'kimi' | 'glm5' | 'nb2' | 'nb_pro' | 'qwen2512' | 'z_image' | 'wan2_2' | 'vidu_q2' | 'seedance_1_5';
@@ -180,6 +182,8 @@ export interface StoryboardItem {
   composition?: string;
   reference_image_url?: string;
   candidate_image_urls?: string[];
+  audio_url?: string;
+  audio_duration?: number;
 
   // Detailed Narrative Metadata
   script_content?: string;     // 剧本内容

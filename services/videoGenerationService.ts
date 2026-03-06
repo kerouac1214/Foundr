@@ -5,5 +5,9 @@ import { getVideoProvider } from "./providers";
 
 export const generateVideoForShot = async (prompt: string, aspectRatio: AspectRatio, engine?: AIEngine, sourceImageUrl?: string): Promise<string> => {
     const provider = getVideoProvider(engine);
-    return await provider.generateVideo(prompt, aspectRatio, sourceImageUrl);
+    const result = await provider.generateVideo(prompt, {
+        aspect_ratio: aspectRatio,
+        source_image_url: sourceImageUrl
+    });
+    return result.video_url;
 };

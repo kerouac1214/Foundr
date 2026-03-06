@@ -364,42 +364,54 @@ ${script}
             const text = await this.chat([
                 {
                     role: 'system',
-                    content: `## 影视分镜与 AI 提示词系统 (Storyboard & AI Prompting System)
+                    content: `## 【最高优先级语言规则 - MANDATORY LANGUAGE RULE】
+**严格遵守以下规则，不可违反：**
+- \`description\` 对象内所有字段（\`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`content\`）**必须全部使用中文**。
+- \`lyric_line\` 字段**必须使用中文**。
 
-### 1. 核心角色 (Role)
-你是一位顶级的**电影分镜导演 (Storyboard Director)** 和 **AI 视频生成专家**。你的任务是将剧本转化为工业级的分镜脚本，精确拆解视听语言，并为 AI 图像工具和 AI 视频模型分别提供极其精准的中文生成指令。
+---
 
-### 2. 拆解准则 (Deconstruction Rules)
-- **视听语言的精确性 (Cinematic Precision)**：明确景别（如：CU, MS, WS, POV）和机位角度（如：Eye-level, Low-angle, High-angle）。
-- **提示词自然语言化 (Natural Language Prompts)**：
-  - **Image Prompt** 必须使用流畅、连续且具有文学色彩的**中文自然语言**。
-  - **严禁**使用关键词堆砌（如：1girl, solo, red dress）。
-  - **要求**描述光影的动态变化、材质的细腻质感以及角色与环境的交互逻辑。
-- **动作离散化演算法 (Action Decomposition & Temporal Discretization)**：
-  - **任何具有叙事权重的动态瞬间（如：进门、摔倒、开火、反应）严禁合并在单一分镜中。**
-  - 你必须按照“预备 (Anticipation) -> 接触/核心 (Contact/Core) -> 结果/反应 (Result/Reaction)”的逻辑至少拆解为 3 个分镜制。
-- **光圈与景深优先 (Aperture & Depth of Field)**：静态帧必须设定焦段和光圈（如：50mm f/1.8 浅景深，或 24mm f/8 极深景深），**严禁在图像生成提示词中出现“运镜”指令**。
-- **AI 去描述化原则 (AI Prompt Generalization)**：在提示词中，**绝对禁止使用角色的具体名字**。将剧中人物替换为泛化词汇（如：A 32yo man, A blond 25yo woman），以便用户配合垫图使用。
-- **强制视觉约束 (Mandatory Constraints)**：严禁使用任何形式的拼接图、多面板、九宫格、分屏或对比图。画面必须是无边框的，不能有画框或留白边缘。图像中绝对不能包含任何文字、字母、排版、标志、水印 or 海报元素（绿色的二进制代码必须作为视觉粒子特效融入画面，而不能作为排版文字覆盖在图片上）。
-- **提示词双轨制 (Dual-Prompting System)**：
-    - **Image Prompt**：专注画面构图、人物泛化特征、光影（基于场景 Lighting）、材质、相机参数与胶片质感。使用流畅的中文句子。
-    - **Video Prompt**：专注画面内物理元素的运动（如：蒸汽上升、眼皮微动、手指摩挲）和镜头的极其微小的推拉摇移。使用流畅的中文句子。
+## 影视分镜快速拆解系统 (Rapid Storyboard Breakdown System)
 
-### 3. 可选资产 (Available Assets)
-- **Characters**: [${charContext}]
-- **Scenes**: [${sceneContext}]
+### 1. 核心任务
+你是一位高效的电影执行导演。你的任务是快速将剧本转化为分镜脚本。为了保证生成速度，你只需要提取最核心的视觉与叙事要素。
 
-### 4. 目标剧本 (Target Script)
-"""
-${script}
-"""
+### 2. 字段规范
+必须严格返回 JSON：
+{
+  "metadata": { "bpm": 120, "energy_level": "High", "overall_mood": "Tense" },
+  "shots": [
+    {
+      "shot_number": 1,
+      "characters": ["角色ID"],
+      "scene": "场景ID",
+      "description": {
+        "shot_type": "景别 (如: 全景, 特写, 中景)",
+        "camera_angle": "机位角度 (如: 平视, 仰拍, 俯拍)",
+        "camera_movement": "运镜 (如: 固定, 推, 拉, 摇, 移)",
+        "content": "画面内容详细描述 (必须包含具体的动作、构图细节)"
+      },
+      "ai_prompts": {
+        "image_generation_prompt": "基于该分镜画面的详细中文绘画提示词，包含光影、构图、角色神态与环境细节",
+        "video_generation_prompt": "描述画面中动态变化的详细中文提示词，专注动作幅度与物理交互"
+      },
+      "lyric_line": "台词/对白原文",
+      "script_content": "该分镜对应的剧本原文内容",
+      "image_description": "画面的纯视觉描述",
+      "dialogue": "角色对白",
+      "action_state": "角色当前动作状态详细描述",
+      "narrative_function": "该镜头的叙事功能或隐喻意义"
+    }
+  ]
+}
 
-### 5. 约束限制 (Constraints)
-- **ID 强绑定**：在 "shots" 数组中，"scene" 必须严格填入上表提供的 \`scene_id\` (例如：\`s1\`)，"characters" 必须填入 \`char_id\` 数组。
-- **严禁使用名称**：绝对不要在 "scene" 或 "characters" 字段中填入名称（如 "客厅"），必须仅使用 ID。如果无法对应，请根据上下文关联最匹配的 ID。
-- **分镜数量限制**：每次请求最多输出 **12 个** shots，超出部分省略，以确保完整的 JSON 输出。
-- **全中文描述强制要求**：在返回的 JSON 中，\`description\` 对象下的所有字段（包括 \`shot_type\`, \`camera_angle\`, \`camera_movement\`, \`lens_and_aperture\`, \`lighting\`, \`content\`, \`sound_design\`）以及 \`lyric_line\`，**必须全部使用中文**进行详细描述，绝不能输出英文。
-- **输出格式**：确保逻辑连贯，输出必须为合规 successful JSON。`
+## 强制约束
+- \`characters\` 和 \`scene\` 必须引用提供的资产 ID。
+- 必须为每一个镜头生成详细的 \`ai_prompts\`，这对于后续渲染至关重要。`
+                },
+                {
+                    role: 'user',
+                    content: `角色资产：\n${charContext}\n\n场景资产：\n${sceneContext}\n\n剧本：\n${script}\n\n请按核心分镜规则拆解并返回 JSON。`
                 }
             ], true);
 

@@ -11,12 +11,13 @@ const Toast: React.FC<ToastProps> = ({ message, type = 'success', duration = 300
     const [isVisible, setIsVisible] = useState(true);
 
     useEffect(() => {
+        const actualDuration = type === 'error' ? Math.max(duration, 10000) : duration;
         const timer = setTimeout(() => {
             setIsVisible(false);
             setTimeout(onClose, 300);
-        }, duration);
+        }, actualDuration);
         return () => clearTimeout(timer);
-    }, [duration, onClose]);
+    }, [duration, onClose, type]);
 
     const bgColor = type === 'success' ? 'bg-emerald-500' : type === 'error' ? 'bg-red-500' : 'bg-[#D4AF37]';
     const icon = type === 'success' ? (

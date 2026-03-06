@@ -5,9 +5,11 @@
 export const proxyRunningHubUrl = (url: string): string => {
     if (!url) return url;
 
-    const isProd = import.meta.env.PROD || (window as any).process?.type === 'renderer';
+    const isProd = import.meta.env.PROD;
+    const isElectron = /electron/i.test(navigator.userAgent);
 
-    // In production/Electron, we want to use the absolute URL directly to avoid proxy issues
+    // In production web or Electron production, we ideally use absolute URLs.
+    // However, in Electron development, we still want the proxy if it's configured.
     if (isProd) return url;
 
     // Catch various RunningHub bucket variations (e.g., rh-images, rh-assets, etc. on myqcloud.com)

@@ -78,5 +78,10 @@ export const generateVisualPreview = async (
     refImages?: string[]
 ): Promise<string> => {
     const provider = getImageProvider(engine);
-    return await provider.generateImage(prompt, seed, aspectRatio, refImages);
+    const result = await provider.generateImage(prompt, {
+        seed,
+        aspect_ratio: aspectRatio,
+        reference_image_url: refImages?.[0]
+    });
+    return result.preview_url;
 };
