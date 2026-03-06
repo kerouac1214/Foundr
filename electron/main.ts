@@ -1,14 +1,10 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import isDev from 'electron-is-dev';
 
-// The built directory structure
-//
-// ├─┬ dist-electron
-// │ └── main.js
-// ├─┬ dist
-// │ └── index.html
-//
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 process.env.DIST = path.join(__dirname, '../dist');
 process.env.VITE_PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public');
 
