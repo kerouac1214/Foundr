@@ -1,0 +1,39 @@
+name: Build Windows App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Application
+        run: npm run electron:build
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'AIzaSyBCnlyZSrp6g78DXpg0UmcbWCBWojcwe1o' }}
+          RUNNINGHUB_API_KEY: ${{ secrets.RUNNINGHUB_API_KEY || 'ab6b4d8b5a0e44e9ba7444885a4492dc' }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY || 'sk-af4be68bfa884fe29cdfc988b6eb656f' }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY || 'sk-3nO690Yv1rK9332yF4y2u1p5b3s292G4A2A2S2Q2W2S2E2R' }}
+          LAF_APP_ID: ${{ secrets.LAF_APP_ID || 'mzr18raqjh' }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Foundr-Windows-Exe
+          path: release/*.exe
